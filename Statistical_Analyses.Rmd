@@ -3,12 +3,115 @@ title: "Statistical_Analyses"
 author: "Lilith Diener"
 date: "2025-07-20"
 output: html_document
+
+Packages
+```{r}
+
+library(dplyr)
+library(readxl)
+library(stringr)
+library(dae)
+library(ggplot2)
+```
+Creating  for each measurement in the Data set
 ---
 ```{r}
-install.packages("readxl")
-library(readxl)
-read_excel("C:\\Users\\Win10\\Desktop\\UCT\\Honours Project Gracilaria\\Data\\Gracilaria\\Gracilaria_gracilis_Sorted")
+
+Gracilaria_data <- read_excel("C:/Users/Win10/Desktop/UCT/Honours Project Gracilaria/Data/Statistical_Analyses_R/RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR.xlsx")
+
+GracilariaID_data <- Gracilaria_data  %>%
+  mutate(ID = paste0(substr(Species,1,1), substr(word(Species,2),1,1), "_W", Week,"_T", Tank_No,"_", substr(Measurement_Type,1,1),sprintf("%02d", Measurement_No),"_",   format(Date, "%Y%m%d")))%>%
+  select(ID, everything()) 
+
+sum(duplicated(GracilariaID_data$ID))
+
+
 ```
+
+ Processing the data Average STD of length and weight . 
+ Then calc for growth rate per day
+```{r}
+
+Ave <- GracilariaID_data %>%
+  group_by(Week,Treatment ,Measurement_Type) %>%
+  summarise(
+    mean_value = mean(Value, na.rm = TRUE),
+    sd_value = sd(Value, na.rm = TRUE),
+    n = n()
+  )
+
+ length <-GracilariaID_data %>%
+  group_by(Week,Treatment ) %>%
+  summarise(
+    mean_value = mean(Value, na.rm = TRUE),
+    sd_value = sd(Value, na.rm = TRUE),
+    n = n()
+  )
+
+
+
+
+
+
+GracilariaRGR_data <- GracilariaID_data  %>%
+  mutate(GracilariaRGR_data, RGR_Length =(Formula for growth rate))
+
+
+ ggplot(length, aes(x = , y = length$mean_value )) +
+   geom_boxplot() +
+   facet_wrap(~ Week) +
+   theme_minimal()
+
+
+
+
+
+
+
+
+
+```
+
+using anova and t test we need to module the data by relative significances 
+growth rate - length over time point or even with weight. to also compared the 
+different treatments to one other.
+
+
+```{r}
+
+
+avo 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ```{r setup, include=TRUE}
 knitr::opts_chunk$set(echo = FALSE)
