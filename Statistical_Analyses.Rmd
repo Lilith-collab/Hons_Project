@@ -11,7 +11,7 @@ options(repos = c(CRAN = "https://cloud.r-project.org"))
 
 ```
 
-```{r packages}
+```{r}
 
 
 install.packages("gt")
@@ -39,11 +39,12 @@ library(tibble)
 
 Reading in the data and creating a unique primary ID for each individual measurement
 
-```{r}
+```{r Data}
 
 # Read in data
 
-final_data <-Raw_data_complete
+final_data <- read_excel("C:/Users/Win10/Desktop/UCT/Honours Project Gracilaria/Data/Statistical_Analyses_R/Raw_data_complete.xlsx")
+
 
 # Set the Control treatment as the reference/baseline level
 
@@ -56,7 +57,7 @@ Setting the Control treatment as the baseline level for linear modelling later.
 
 Processing the data Average STD of Gracilaria gracilis length by treatment per week.
 
-```{r}
+```{r GG Length}
 ################################################################################
                              #GG#       #LENGTH#
 ################################################################################
@@ -128,248 +129,6 @@ emmeans_mGAL$emmeans
 
 # View Tukey-adjusted pairwise comparisons
 emmeans_mGAL$contrasts
-
-
-###############################################################################
-                            ##  ANOVA Table ##
-###############################################################################
-
-# Create a model of gg weight vs gg length for table
-
-
-gg_al <- gg_avg_length %>%   #extracting avg length
-arrange(Tank_No) %>% 
-summarise(Treatment = Treatment, Avg_Length = Avg_Length, Row_ID = row_number(), .groups = "drop")
-
-gg_aw <- gg_avg_weight %>%    #extracting avg weight
-arrange(Tank_No) %>% 
-summarise(Avg_Weight = Avg_Weight,Row_ID = row_number(), .groups = "drop")
-
-
-gg_aov_merged <- merge(gg_al,gg_aw, by = "Row_ID" ) 
-  
-  mAOV <- aov(Avg_Weight ~ Avg_Length, data = gg_aov_merged)
-
-  gg_avg_length_anova <- as.data.frame(summary(mAOV)[[1]]) %>%
-  tibble::rownames_to_column(var = "Term")
-  
-  gg_avg_length_anova %>%
-  gt(rowname_col = "Term") %>%
-  fmt_number(columns = where(is.numeric), decimals = 3) %>%
-  cols_label(
-    `Df` = "Degrees of Freedom",
-    `Sum Sq` = "Sum of Squares",
-    `Mean Sq` = "Mean Square",
-    `F value` = "F-value",
-    `Pr(>F)` = "p-value"
-  ) %>%
-  tab_spanner(
-    label = "ANOVA Results",
-    columns = everything()
-  )
-  
-  
-  
-  
-  
-  anova_df <- anova(mAOV) %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column("Treatment") %>%
-  filter(Term != "Residuals")  # remove residuals
-
-# Build gt table
-anova_df %>%
-  gt(rowname_col = "Term") %>%
-  fmt_number(columns = where(is.numeric), decimals = 3) %>%
-  cols_label(
-    Df = "Degrees of Freedom",
-    `Sum Sq` = "Sum of Squares",
-    `Mean Sq` = "Mean Square",
-    `F value` = "F-value",
-    `Pr(>F)` = "p-value"
-  ) %>%
-  tab_spanner(
-    label = "ANOVA Results by Treatment",
-    columns = everything()
-  )
-
-
-# New Attempt
-
-# Function to extract only regression row from aov()
-tidy_anova <- function(model, treatment_name) {
-  a <- summary(model)[[1]]
-  a <- a[rownames(a) != "Residuals", ] # remove residuals
-  data.frame(
-    Treatment = treatment_name,
-     `Sum of squares` = a[["Sum Sq"]],
-    df = a[["Df"]],
-    `Mean squares` = a[["Mean Sq"]],
-    `F value` = a[["F value"]],
-    check.names = FALSE
-  )
-}
-
-# Critical F function
-get_dfs <- function(model) {
-  a <- summary(model)[[1]]
-  df1 <- a[1, "Df"] # numerator df
-  df2 <- a["Residuals", "Df"] # denominator df
-  c(df1 = df1, df2 = df2)
-}
-
-# Critical F table
-critical_Fs <- tibble(
-  Treatment = c("Control", "5", "10"),
-  df1 = c(get_dfs(mcon)["df1"], get_dfs(m5)["df1"], get_dfs(m10)["df1"]),
-  df2 = c(get_dfs(mcon)["df2"], get_dfs(m5)["df2"], get_dfs(m10)["df2"])
-) %>%
-  mutate(F0.01 = qf(0.99, df1, df2)) %>%
-  select(Treatment, F0.01)
-
-# Combine ANOVAs — only regression rows
-anova_df <- bind_rows(
-  tidy_anova(mcon, "Control"),
-  tidy_anova(m5, "5"),
-  tidy_anova(m10, "10")
-) %>%
-  left_join(critical_Fs, by = "Treatment")
-
-# Final table — one row per treatment
-anova_df %>%
-  gt(rowname_col = "Treatment") %>%
-  fmt_number(
-    columns = where(is.numeric),
-    decimals = 2
-  ) %>%
-  tab_header(
-    title = md("Analysis of variance between thallus length and net wet weight"),
-    subtitle = md("*Gracilariopsis longissima* - grouped by cutting length")
-  ) %>%
-  tab_options(
-    table.font.size = px(14),
-    data_row.padding = px(5)
-)
-
-
-
-
-
-
-
-
-tidy_anova <- function(model, treatment_name) {
-  a <- summary(model)[[1]]
-  data.frame(
-    Treatment = treatment_name,
-    Source = rownames(a),
-    `Sum of squares` = a[["Sum Sq"]],
-    df = a[["Df"]],
-    `Mean squares` = a[["Mean Sq"]],
-    `F value` = a[["F value"]],
-    check.names = FALSE
-  )
-}
-
-# Extract dfs for each model
-get_dfs <- function(model) {
-  a <- summary(model)[[1]]
-  # numerator df is usually first row (treatment), denominator df is residuals row
-  df1 <- a["AW", "Df"] # adjust "AW" if your predictor has different name
-  df2 <- a["Residuals", "Df"]
-  c(df1 = df1, df2 = df2)
-}
-
-# Calculate critical F at 0.01 for each model
-critical_Fs <- tibble(
-  Treatment = c("Control", "5", "10"),
-  df1 = c(get_dfs(mcon)["df1"], get_dfs(m5)["df1"], get_dfs(m10)["df1"]),
-  df2 = c(get_dfs(mcon)["df2"], get_dfs(m5)["df2"], get_dfs(m10)["df2"])
-) %>%
-  mutate(F0.01 = qf(0.99, df1, df2)) %>%
-  select(Treatment, F0.01)
-
-# Combine ANOVA summaries
-anova_df <- bind_rows(
-  tidy_anova(mcon, "Control"),
-  tidy_anova(m5, "5"),
-  tidy_anova(m10, "10")
-)
-
-# Join critical F values to anova_df by Treatment
-anova_df <- anova_df %>%
-  left_join(critical_Fs, by = "Treatment")
-
-# Format with gt
-anova_df %>%
-  filter(Source != "Residuals") %>%  # usually exclude residual row
-  gt(groupname_col = "Treatment", rowname_col = "Source") %>%
-  fmt_number(
-    columns = where(is.numeric),
-    decimals = 2
-  ) %>%
-  tab_header(
-    title = md("*Analysis of variance between thallus length and net wet weight*"),
-    subtitle = md("Gracilaria chorda — grouped by cutting length")
-  ) %>%
-  tab_options(
-    table.font.size = px(14),
-    data_row.padding = px(5)
-  )
-
-
-
-
-
-
-
-
-
-
-
-mcon <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "Control"))
-m5 <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "5"))
-m10 <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "10"))
-
-# Function to extract ANOVA table into tidy form
-tidy_anova <- function(model, treatment_name) {
-  a <- summary(model)[[1]]
-  data.frame(
-    Treatment = treatment_name,
-    Source = rownames(a),
-    `Sum of squares` = a[["Sum Sq"]],
-    df = a[["Df"]],
-    `Mean squares` = a[["Mean Sq"]],
-    `F value` = a[["F value"]],
-    check.names = FALSE
-  )
-}
-
-# Combine results
-anova_df <- bind_rows(
-  tidy_anova(mcon, "Control"),
-  tidy_anova(m5, "5"),
-  tidy_anova(m10, "10")
-)
-
-# Add the F0.01 column (constant for all, adjust as needed)
-anova_df$F0.01 <- 6.76
-
-# Format with gt
-anova_df %>%
-  gt(groupname_col = "Treatment", rowname_col = "Source") %>%
-  fmt_number(
-    columns = where(is.numeric),
-    decimals = 2
-  ) %>%
-  tab_header(
-    title = md("*Analysis of variance between thallus length and net wet weight*"),
-    subtitle = md("Gracilaria chorda — grouped by cutting length")
-  ) %>%
-  tab_options(
-    table.font.size = px(14),
-    data_row.padding = px(5)
-)
 
 
 ######### Plotting ##############################################################
@@ -464,7 +223,7 @@ gg_avg_length_anova %>%
 
 Calculating relative growth rate of length by treatment , GG
 
-```{r}
+```{r GG RGR Length}
 ################################################################################
                          #GG#   #RGR#     #LENGTH#
 ################################################################################
@@ -540,7 +299,7 @@ group  2  0.0179 0.9822
 
 
 
-plot(mGRL)
+# plot(mGRL)
 
 ######### Plotting ##############################################################
 
@@ -1728,19 +1487,103 @@ ggplot(gl_avg_merged, aes(x = AL, y = AW)) +
     panel.grid.minor = element_blank()
   )
 
-"If you want by tank number maybe if you want tank number"
- geom_text(
-    label=TanK, 
-    nudge_x = 0.25, nudge_y = 0.25, 
-    check_overlap = T
- )+
 ################################################################################
 
+ 
+ 
+
+
+
+
+
+
+
+
+
+mcon <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "Control"))
+m5 <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "5"))
+m10 <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "10"))
+
+# Function to extract ANOVA table into tidy form
+tidy_anova <- function(model, treatment_name) {
+  a <- summary(model)[[1]]
+  data.frame(
+    Treatment = treatment_name,
+    Source = rownames(a),
+    `Sum of squares` = a[["Sum Sq"]],
+    df = a[["Df"]],
+    `Mean squares` = a[["Mean Sq"]],
+    `F value` = a[["F value"]],
+    check.names = FALSE
+  )
+}
+
+# Combine results
+anova_df <- bind_rows(
+  tidy_anova(mcon, "Control"),
+  tidy_anova(m5, "5"),
+  tidy_anova(m10, "10")
+)
+
+# Add the F0.01 column (constant for all, adjust as needed)
+anova_df$F0.01 <- 6.76
+
+# Format with gt
+anova_df %>%
+  gt(groupname_col = "Treatment", rowname_col = "Source") %>%
+  fmt_number(
+    columns = where(is.numeric),
+    decimals = 2
+  ) %>%
+  tab_header(
+    title = md("*Analysis of variance between thallus length and net wet weight*"),
+    subtitle = md("Gracilaria chorda — grouped by cutting length")
+  ) %>%
+  tab_options(
+    table.font.size = px(14),
+    data_row.padding = px(5)
+)
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
 # Plot seeing the best tanks / spagetthi plot
 
 ggplot(gl_avg_weight, aes(x = Date, y = Avg_Weight, group = Tank_No, color = Treatment)) +
   geom_line(alpha = 0.4) +
   labs(title = "Growth Trajectories per Tank")
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
 
 ```
 
