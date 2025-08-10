@@ -1,0 +1,838 @@
+---
+title: "Direct_comparison_trial"
+author: "Lilith Diener"
+date: "2025-08-10"
+output: html_document
+---
+
+Installing and loading all necessary packages and importing the data set 
+
+```{r packages}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+```
+
+```{r packages}
+
+
+install.packages("gt")
+
+library(gt)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(dae)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(lubridate)
+library(emmeans)
+library(tidyverse)
+library(styler)
+library(ggpmisc)
+library(car)
+library(nlme)
+library(tibble)
+library(ggplot2)
+
+# Import data set
+
+comp_data <- Direct_comparison_trial
+
+```
+
+LENGTH
+
+Filtering the data and calculating averages
+
+```{r}
+
+# Filter data by length
+  
+length <- comp_data %>%
+  filter(Measurement_Type == "Length")
+  
+# Calculate average length, SD and SE
+
+avg_length <- length %>%
+  group_by(Tank_No, Week, Species) %>%
+  summarise(Avg_Length = mean(Value,na.rm = TRUE), SD_Length = sd(Value), N = n(),
+SE_Length = SD_Length / sqrt(N), Date = max(Date),.groups = "drop") %>% 
+  ungroup()
+
+# Average length of species per week
+
+avg_length_per_week_by_treatment <- avg_length  %>%
+  group_by( Week, Species) %>%
+  summarise(
+    Avg_Length = mean(Avg_Length,na.rm = TRUE), N = n(),
+    SD_Length = mean(SD_Length,na.rm = TRUE), SE_Length = mean(SE_Length,na.rm = TRUE),
+    Date = max(Date), .groups = "drop")
+
+```
+
+Testing ANOVA assumptions 
+
+```{r}
+
+# Shapiro-Wilk normality test 
+
+shapiro.test(avg_length_per_week_by_treatment$Avg_Length) # normality assumption met
+
+# Levene's Test 
+
+leveneTest(avg_length_per_week_by_treatment$Avg_Length, 
+avg_length_per_week_by_treatment$Species, center = mean ) # homogeneity assumption met
+
+```
+
+Modelling Average length and post hoc test
+
+```{r}
+
+# Model of average length per species per week
+
+mL <-  aov(Avg_Length ~ Species, data = avg_length_per_week_by_treatment)
+
+summary(mL)
+
+aov(mL)
+
+anova(mL)
+
+
+mL_1 <-  aov(Avg_Length ~ Species + Week, data = avg_length_per_week_by_treatment)
+
+summary(mL_1)
+
+aov(mL_1)
+
+anova(mL_1)
+
+# Pick the best model 
+
+
+# Run post hoc test
+
+# Run emmeans for Treatment with pairwise comparisons
+emmeans_mL <- emmeans(mL, pairwise ~ Species)
+
+# View estimated marginal means
+emmeans_mL$emmeans
+
+# View Tukey-adjusted pairwise comparisons
+emmeans_mL$contrasts
+```
+
+ANOVA Table
+
+```{r}
+
+```
+
+Plotting Average length (boxplot, line graph)
+
+```{r}
+
+# Box plot of distribution of length per treatment per week by tank number
+
+ggplot(avg_length, aes(x = factor(Week), y = Avg_Length, fill = Species)) +
+  geom_boxplot(position = position_dodge(width = 0.6),alpha =0.5)+ facet_wrap(~ Species, scale = "free_x") +
+   geom_text(aes(label = Tank_No), vjust = -0.5, size = 3)+
+labs(
+    title = "Distribution of Length per Species by Week",
+    y = "Average Length",
+    x = "Week"
+  ) 
+
+
+# New improved boxplot
+
+species_labels <- c(
+  "Gracilaria gracilis" = "italic('Gracilaria gracilis')",
+  "Gracilariopsis longissima" = "italic('Gracilariopsis longissima')"
+)
+
+ggplot(avg_length, aes(x = factor(Week), y = Avg_Length)) +
+  geom_boxplot(
+    position = position_dodge(width = 0.6),
+    alpha = 0.5,
+    colour = "black"
+  ) +
+  facet_wrap(
+    ~ Species,
+    scales = "free_x",
+    labeller = labeller(Species = as_labeller(species_labels, label_parsed))
+  ) +
+  scale_fill_manual(
+    values = c("white", "grey80"),
+    labels = c(
+      "Gracilaria gracilis" = expression(italic(Gracilaria~gracilis)),
+      "Gracilariopsis longissima" = expression(italic(Gracilariopsis~longissima))
+    )
+  ) +
+  labs(
+    title = "Distribution of Length per Species by Week",
+    y = "Average length (cm)",
+    x = "Week"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid = element_blank(),                                   # remove gridlines
+    panel.border = element_rect(color = "black", fill = NA),        # border around plot
+    strip.background = element_rect(fill = "white", color = "black"), # white facet strip with black border
+    axis.line = element_line(color = "black"),                      # add axes
+    legend.title = element_blank(),
+    legend.position = "right"
+  )
+
+
+# Line graph of the Average Treatment Length per week 
+
+ggplot(avg_length_per_week_by_treatment, aes(x = Week, y = Avg_Length, shape = Species)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = Avg_Length - SD_Length, ymax = Avg_Length + SD_Length),
+                width = 0.2, alpha = 0.6) +
+  labs(
+    title = "Average Treatment Length Per Week",
+    x = "Week",
+    y = "Average length (cm)",
+    color = "Species"
+  ) +
+  theme_minimal() +
+    theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color = "black")
+  ) +
+  scale_color_brewer(palette = "Dark2")
+
+
+
+# New improved line graph
+
+ggplot(avg_length_per_week_by_treatment, 
+       aes(x = Week, y = Avg_Length, shape = Species)) +
+  geom_line(linewidth = 1, aes(color = Species)) +
+  geom_point(size = 3, stroke = 1.2, aes(color = Species, fill = Species)) +
+  geom_errorbar(aes(ymin = Avg_Length - SD_Length, ymax = Avg_Length + SD_Length, color = Species),
+                width = 0.2, alpha = 0.6) +
+  labs(
+    title = "Average Treatment Length Per Week",
+    x = "Week",
+    y = "Average length (cm)",
+    shape = "Species",
+    color = "Species"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color = "black")
+  ) +
+  scale_shape_manual(
+    values = c(21, 22), # hollow circle, hollow square
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  ) +
+  scale_color_manual(
+    values = c("black", "black"), # black outlines
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  ) +
+  scale_fill_manual(
+    values = c("white", "white"), 
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  )
+
+```
+
+Tabulating Average Length of both species
+
+```{r}
+
+# Average Length Table
+
+avg_length_per_week_by_treatment$Date <- as.Date(avg_length_per_week_by_treatment$Date) # proper format
+
+
+length_table <- avg_length_per_week_by_treatment %>% # Getting days
+  arrange( Date) %>%
+  group_by(Species) %>%
+  mutate(Days = as.numeric(Date -lag(Date))) %>%
+  replace_na(list(Days = 0)) %>%
+  ungroup()
+
+length_table <- length_table %>%
+  group_by(Species) %>%
+  mutate(totDays = as.numeric((Days)+lag(Days))) %>%
+  replace_na(list(totDays= 0)) %>%
+  ungroup()
+
+length_table1 <- length_table %>% # Joining Week and Days
+  mutate(Week_Days = paste0("Week ", Week, "  ( ",totDays," )")) %>%
+  select(Species, Week_Days, Avg_Length)
+
+length_table1 <- length_table1 %>% # Long to Wide format 
+  pivot_wider(
+    names_from = Week_Days,
+    values_from = Avg_Length)
+
+#gt ave length table for species 
+
+
+length_table1 %>%
+  gt() %>%
+  fmt_number(
+    columns = everything(),
+    decimals = 2
+  ) %>%
+  tab_header(title = "Average Length per Week") %>%
+  tab_spanner(
+    label = "Length (cm)",
+    columns = -Species
+  ) %>%
+    tab_style(
+    style = cell_text(style = "italic"),
+    locations = cells_body(columns = "Species")) %>%
+  cols_label(Species = "Species / Average Length (Days of cultivation)") %>%
+  tab_style(
+    style = cell_text(v_align = "middle"),
+    locations = cells_column_labels(columns = "Species")
+  )
+
+```
+
+Relative Growth Rate (RGR) for Length
+
+```{r}
+
+avg_length$Date <- as.Date(avg_length$Date) # proper format
+
+# Calculate RGR for length
+
+rgr_length <- avg_length %>%
+arrange(Tank_No) %>% 
+group_by(Tank_No,Species) %>%
+  mutate(Delta_Time = as.numeric((Date) - lag(Date)),
+  RGR_Length = (log(Avg_Length) - lag(log(Avg_Length))) / Delta_Time,
+  Tot_RGR = (Avg_Length[Week == 3]-Avg_Length[Week == 0])/as.numeric(max(Date)-min(Date)))
+
+ rgr_weekly_sd <- rgr_length %>%
+  group_by(Week, Species) %>%
+  summarise(
+    SD_RGR = sd(RGR_Length, na.rm = TRUE), .groups = "drop")
+
+avg_rgr_length <- rgr_length %>%
+  group_by(Species, Week) %>%
+  summarise(
+  RGR_Length = mean(RGR_Length,na.rm = TRUE),
+  SD_RGR_Length = mean(RGR_Length, na.rm = TRUE), N = n(),
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE), # need SD still
+  Date = max(Date), .groups = "drop") %>%
+ungroup()
+ 
+avg_length$Date <- as.Date(avg_length$Date)
+
+```
+
+Tabulating RGR Length
+
+```{r}
+
+rgr_length_table <- avg_rgr_length %>%
+  mutate(Date = as.Date(Date)) %>% 
+  group_by(Species) %>%
+  # Calculate cumulative days since first measurement
+  mutate(Days_cum = as.numeric(Date - first(Date))) %>%
+  # Create range labels
+  mutate(RGR_Days = paste0(lag(Days_cum, default = 0), "-", Days_cum)) %>%
+  # Replace NA in RGR_Length for week 0 with 0
+  mutate(RGR_Length = replace_na(RGR_Length, 0)) %>%
+  ungroup()
+
+# Pivot to wide format
+rgr_length_table1 <- rgr_length_table %>%
+  select(Species, RGR_Days, RGR_Length, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Length
+  )
+
+rgr_order <- rgr_length_table %>%
+  arrange(Days_cum) %>%
+  pull(RGR_Days) %>%
+  unique()
+
+rgr_length_table1 <- rgr_length_table %>%
+  select(Species, RGR_Days, RGR_Length, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Length
+  ) %>%
+   select(Species, all_of(rgr_order), Tot_RGR)
+
+rgr_length_table1 %>% gt() %>% tab_header(
+    title = md("**Relative Growth Rate (Length)**"),
+    subtitle = "Per time period with total RGR at right"
+  ) %>% fmt_number(
+    columns = where(is.numeric),
+    decimals = 5
+  ) %>% cols_label(
+    Tot_RGR = "(0-21)"
+  ) %>% tab_spanner(
+    label = "RGR per Time Period (Days)",
+    columns = c("0-0":"7-14") # zurückändern in 14-21, sobald ich alle Daten habe!!
+  ) %>% tab_spanner(label = "Total RGR (Days)",
+    columns = Tot_RGR
+  ) %>%
+  tab_style(
+  style = cell_text(weight = "bold"),
+  locations = cells_stub(rows = everything())
+) %>%
+tab_style(
+  style = cell_text(style = "italic"),
+  locations = cells_body(columns = "Species")
+) %>%
+tab_style(
+  style = cell_text(v_align = "middle"),
+  locations = cells_column_labels(columns = "Species")
+)
+  
+```
+
+WEIGHT
+
+Filtering the data and calculating averages
+
+```{r}
+
+# Filter data by weight
+
+weight <- comp_data %>%
+  filter(Measurement_Type == "Weight") 
+
+# Calculate average weight, SD and SE
+
+avg_weight <- weight %>% 
+  group_by(Species,Tank_No,Week) %>%
+  summarise(
+  Avg_Weight = mean(Value,na.rm = TRUE),N = n(), SD_Weight = sd(Value, na.rm = TRUE), SE_Weight =       SD_Weight / sqrt(N),Date = max(Date),.groups = "drop") %>%
+  ungroup()
+
+# Average weight of species per week
+ 
+avg_weight_per_week_by_treatment <- avg_weight %>% 
+  group_by(Week,Species) %>%
+  summarise(Avg_Weight = mean(Avg_Weight,na.rm = TRUE), N= n(), SD_Weight = mean(SD_Weight,na.rm = TRUE), SE_Weight = mean(SE_Weight,na.rm = TRUE), Date = max(Date), .groups = "drop") %>%
+  ungroup()
+
+
+```
+
+Testing ANOVA assumptions 
+
+```{r}
+
+# Shapiro-Wilk normality test 
+
+shapiro.test(avg_weight_per_week_by_treatment$Avg_Weight) # normality assumption met
+
+# Levene's Test 
+
+leveneTest(Avg_Weight ~ Species, center = mean, data = avg_weight_per_week_by_treatment) # homogeneity assumption met
+
+```
+
+Modelling Average weight and post hoc test
+
+```{r}
+
+# Model of average weight per species per week
+
+mW_1 <-  lm(Avg_Weight ~ Species + Week, data = avg_weight_per_week_by_treatment)
+
+summary(mW_1)
+
+aov(mW_1)
+
+anova(mW_1)
+
+
+# Run post hoc test
+
+# Run emmeans for Treatment with pairwise comparisons
+emmeans_mW <- emmeans(mW, pairwise ~ Species)
+
+# View estimated marginal means
+emmeans_mW$emmeans
+
+# View Tukey-adjusted pairwise comparisons
+emmeans_mW$contrasts
+
+```
+
+ANOVA Table
+
+```{r}
+
+```
+
+Plotting Average weight (boxplot, line graph)
+
+```{r}
+
+# Box plot of distribution of weight per treatment per week by tank number
+
+species_labels <- c(
+  "Gracilaria gracilis" = "italic('Gracilaria gracilis')",
+  "Gracilariopsis longissima" = "italic('Gracilariopsis longissima')"
+)
+
+ggplot(avg_weight, aes(x = factor(Week), y = Avg_Weight)) +
+  geom_boxplot(
+    position = position_dodge(width = 0.6),
+    alpha = 0.5,
+    colour = "black"
+  ) +
+  facet_wrap(
+    ~ Species,
+    scales = "free_x",
+    labeller = labeller(Species = as_labeller(species_labels, label_parsed))
+  ) +
+  scale_fill_manual(
+    values = c("white", "grey80"),
+    labels = c(
+      "Gracilaria gracilis" = expression(italic(Gracilaria~gracilis)),
+      "Gracilariopsis longissima" = expression(italic(Gracilariopsis~longissima))
+    )
+  ) +
+  labs(
+    title = "Distribution of Weight per Species by Week",
+    y = "Average weight (g)",
+    x = "Week"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid = element_blank(),                                   # remove gridlines
+    panel.border = element_rect(color = "black", fill = NA),        # border around plot
+    strip.background = element_rect(fill = "white", color = "black"), # white facet strip with black border
+    axis.line = element_line(color = "black"),                      # add axes
+    legend.title = element_blank(),
+    legend.position = "right"
+  )
+
+
+# Line graph of the Average Treatment Weight per week 
+
+ggplot(avg_weight_per_week_by_treatment, 
+       aes(x = Week, y = Avg_Weight, shape = Species)) +
+  geom_line(linewidth = 1, aes(color = Species)) +
+  geom_point(size = 3, stroke = 1.2, aes(color = Species, fill = Species)) +
+  geom_errorbar(aes(ymin = Avg_Weight - SD_Weight, ymax = Avg_Weight + SD_Weight, color = Species),
+                width = 0.2, alpha = 0.6) +
+  labs(
+    title = "Average Treatment Weight Per Week",
+    x = "Week",
+    y = "Average weight (g)",
+    shape = "Species",
+    color = "Species"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color = "black")
+  ) +
+  scale_shape_manual(
+    values = c(21, 22), # hollow circle, hollow square
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  ) +
+  scale_color_manual(
+    values = c("black", "black"), # black outlines
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  ) +
+  scale_fill_manual(
+    values = c("white", "white"), 
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  )
+
+```
+
+Tabulating Average Length of both species
+
+```{r}
+
+# Average Weight Table
+
+avg_weight_per_week_by_treatment$Date <- as.Date(avg_weight_per_week_by_treatment$Date) # proper format
+
+
+weight_table <- avg_weight_per_week_by_treatment %>% # Getting days
+  arrange( Date) %>%
+  group_by(Species) %>%
+  mutate(Days = as.numeric(Date -lag(Date))) %>%
+  replace_na(list(Days = 0)) %>%
+  ungroup()
+
+weight_table <- weight_table %>%
+  group_by(Species) %>%
+  mutate(totDays = as.numeric((Days)+lag(Days))) %>%
+  replace_na(list(totDays= 0)) %>%
+  ungroup()
+
+weight_table1 <- weight_table %>% # Joining Week and Days
+  mutate(Week_Days = paste0("Week ", Week, "  ( ",totDays," )")) %>%
+  select(Species, Week_Days, Avg_Weight)
+
+weight_table1 <- weight_table1 %>% # Long to Wide format 
+  pivot_wider(
+    names_from = Week_Days,
+    values_from = Avg_Weight)
+
+#gt avg weight table for species 
+
+
+weight_table1 %>%
+  gt() %>%
+  fmt_number(
+    columns = everything(),
+    decimals = 2
+  ) %>%
+  tab_header(title = "Average Weight per Week") %>%
+  tab_spanner(
+    label = "Weight (g)",
+    columns = -Species
+  ) %>%
+    tab_style(
+    style = cell_text(style = "italic"),
+    locations = cells_body(columns = "Species")) %>%
+  cols_label(Species = "Species / Average Weight (Days of cultivation)") %>%
+  tab_style(
+    style = cell_text(v_align = "middle"),
+    locations = cells_column_labels(columns = "Species")
+  )
+
+```
+
+Relative Growth Rate (RGR) for Weight
+
+```{r}
+
+avg_weight$Date <- as.Date(avg_weight$Date) # proper format
+
+# Calculate RGR for weight
+
+rgr_weight <- avg_weight %>%
+arrange(Tank_No) %>% 
+group_by(Tank_No,Species) %>%
+  mutate(Delta_Time = as.numeric((Date) - lag(Date)),
+  RGR_Weight = (log(Avg_Weight) - lag(log(Avg_Weight))) / Delta_Time,
+  Tot_RGR = (Avg_Weight[Week == 3]-Avg_Weight[Week == 0])/as.numeric(max(Date)-min(Date)))
+
+ rgr_weekly_sd <- rgr_weight %>%
+  group_by(Week, Species) %>%
+  summarise(
+    SD_RGR = sd(RGR_Weight, na.rm = TRUE), .groups = "drop")
+
+avg_rgr_weight <- rgr_weight %>%
+  group_by(Species, Week) %>%
+  summarise(
+  RGR_Weight = mean(RGR_Weight,na.rm = TRUE),
+  SD_RGR_Weight = mean(RGR_Weight, na.rm = TRUE), N = n(),
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE), # need SD still
+  Date = max(Date), .groups = "drop") %>%
+ungroup()
+ 
+avg_weight$Date <- as.Date(avg_weight$Date)
+
+```
+
+Tabulating RGR Weight
+
+```{r}
+
+rgr_weight_table <- avg_rgr_weight %>%
+  mutate(Date = as.Date(Date)) %>% 
+  group_by(Species) %>%
+  # Calculate cumulative days since first measurement
+  mutate(Days_cum = as.numeric(Date - first(Date))) %>%
+  # Create range labels
+  mutate(RGR_Days = paste0(lag(Days_cum, default = 0), "-", Days_cum)) %>%
+  # Replace NA in RGR_Length for week 0 with 0
+  mutate(RGR_Weight = replace_na(RGR_Weight, 0)) %>%
+  ungroup()
+
+# Pivot to wide format
+rgr_weight_table1 <- rgr_weight_table %>%
+  select(Species, RGR_Days, RGR_Weight, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Weight
+  )
+
+rgr_order <- rgr_weight_table %>%
+  arrange(Days_cum) %>%
+  pull(RGR_Days) %>%
+  unique()
+
+rgr_weight_table1 <- rgr_weight_table %>%
+  select(Species, RGR_Days, RGR_Weight, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Weight
+  ) %>%
+   select(Species, all_of(rgr_order), Tot_RGR)
+
+rgr_weight_table1 %>% gt() %>% tab_header(
+    title = md("**Relative Growth Rate (Weight)**"),
+    subtitle = "Per time period with total RGR at right"
+  ) %>% fmt_number(
+    columns = where(is.numeric),
+    decimals = 5
+  ) %>% cols_label(
+    Tot_RGR = "(0-21)"
+  ) %>% tab_spanner(
+    label = "RGR per Time Period (Days)",
+    columns = c("0-0":"7-14") # evtl. ändern, vllt falsch?
+  ) %>% tab_spanner(label = "Total RGR (Days)",
+    columns = Tot_RGR
+  ) %>%
+  tab_style(
+  style = cell_text(weight = "bold"),
+  locations = cells_stub(rows = everything())
+) %>%
+tab_style(
+  style = cell_text(style = "italic"),
+  locations = cells_body(columns = "Species")
+) %>%
+tab_style(
+  style = cell_text(v_align = "middle"),
+  locations = cells_column_labels(columns = "Species")
+)
+
+```
+
+Scatterplots for both species
+
+```{r}
+
+#Linking length and weight to each tank
+
+al <- avg_length %>%   #extracting avg length
+arrange(Tank_No) %>% 
+summarise(Species = Species, AL = Avg_Length, Row_ID = row_number(), .groups = "drop")
+
+aw <- avg_weight %>%    #extracting avg weight
+arrange(Tank_No) %>% 
+summarise(AW = Avg_Weight,Row_ID = row_number(), .groups = "drop")
+
+
+# Scatterplot of length vs wet weight for Gracilaria gracilis
+
+avg_merged <- merge(al,aw, by = "Row_ID" ) %>% 
+filter(Species == "Gracilaria gracilis") 
+
+ggplot(avg_merged, aes(x = AL, y = AW)) +
+  geom_point(shape = 1, size = 3, aes(color = Species)) + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(
+    x = "Length (cm)",
+    y = "Wet weight (g)",
+    color = ""  
+  ) +
+  scale_color_manual(values = c("black"),
+  labels = c(expression(italic("Gracilaria gracilis")))
+  ) + 
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    ,
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+
+# Scatterplot of length vs wet weight for Gracilariopsis longissima
+
+avg_merged <- merge(al,aw, by = "Row_ID" ) %>% 
+filter(Species == "Gracilariopsis longissima") 
+
+ggplot(avg_merged, aes(x = AL, y = AW)) +
+  geom_point(shape = 0, size = 3, aes(color = Species)) + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(
+    x = "Length (cm)",
+    y = "Wet weight (g)",
+    color = ""  
+  ) +
+  scale_color_manual(values = c("black"),
+ labels = c(expression(italic("Gracilariopsis longissima")))
+  ) + 
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    ,
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

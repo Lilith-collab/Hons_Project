@@ -1,51 +1,320 @@
----
-title: "Statistical_Analyses"
-author: "Lilith Diener"
-date: "2025-07-20"
-output: html_document
+------------------------------------------------------------------------
 
-Packages
-```{r}
 
+
+title: "Statistical_Analyses" author: "Lilith Diener" date: "2025-07-20" output: html_document
+
+Installing and loading all necessary packages
+
+```{r packages}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+```
+
+```{r packages}
+
+
+install.packages("gt")
+
+
+library(gt)
+library(tidyr)
 library(dplyr)
 library(readxl)
 library(stringr)
 library(dae)
 library(ggplot2)
-```
-Creating  for each measurement in the Data set
----
-```{r}
-
-Gracilaria_data <- read_excel("C:/Users/Win10/Desktop/UCT/Honours Project Gracilaria/Data/Statistical_Analyses_R/RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR.xlsx")
-
-GracilariaID_data <- Gracilaria_data  %>%
-  mutate(ID = paste0(substr(Species,1,1), substr(word(Species,2),1,1), "_W", Week,"_T", Tank_No,"_", substr(Measurement_Type,1,1),sprintf("%02d", Measurement_No),"_",   format(Date, "%Y%m%d")))%>%
-  select(ID, everything()) 
-
-sum(duplicated(GracilariaID_data$ID))
-
+library(lme4)
+library(lmerTest)
+library(lubridate)
+library(emmeans)
+library(tidyverse)
+library(styler)
+library(ggpmisc)
+library(car)
+library(nlme)
+library(tibble)
 
 ```
 
- Processing the data Average STD of length and weight . 
- Then calc for growth rate per day
+Reading in the data and creating a unique primary ID for each individual measurement
+
 ```{r}
 
-Ave <- GracilariaID_data %>%
-  group_by(Week,Treatment ,Measurement_Type) %>%
+# Read in data
+
+final_data <-Raw_data_complete
+
+# Set the Control treatment as the reference/baseline level
+
+final_data$Treatment <- as.factor(final_data$Treatment)
+final_data$Treatment <- relevel(final_data$Treatment, ref = "Control")
+
+```
+
+Setting the Control treatment as the baseline level for linear modelling later.
+
+Processing the data Average STD of Gracilaria gracilis length by treatment per week.
+
+```{r}
+################################################################################
+                             #GG#       #LENGTH#
+################################################################################
+
+# Average Length and Standard deviation of Gracilaria gracilis for each tank per week
+
+# Filter data by species and length
+
+gg_length <- final_data %>%
+  filter(Measurement_Type == "Length", Species == "Gracilaria gracilis" )
+  
+# Calculate mean SD and SE
+
+gg_avg_length <- gg_length %>%
+  group_by(Treatment, Tank_No,Week) %>%
+  summarise(Avg_Length = mean(Value,na.rm = TRUE), SD_Length = sd(Value), N = n(),
+SE_Length = SD_Length / sqrt(N), Date = max(Date),.groups = "drop") %>% 
+  ungroup() 
+
+# Average treatment length per week
+
+gg_avg_length_per_week_by_treatment <- gg_avg_length  %>%
+  group_by( Week,Treatment) %>%
   summarise(
-    mean_value = mean(Value, na.rm = TRUE),
-    sd_value = sd(Value, na.rm = TRUE),
-    n = n()
+    Avg_Length = mean(Avg_Length,na.rm = TRUE), N = n(),
+    SD_Length = mean(SD_Length,na.rm = TRUE), SE_Length = mean(SE_Length,na.rm = TRUE),
+    Date = max(Date), .groups = "drop")
+
+
+####### Modeling ################################################################
+
+
+# Shapiro-Wilk normality test to test normality of gg avg length per treatment per week
+
+shapiro.test(gg_avg_length_per_week_by_treatment$Avg_Length)
+
+'Shapiro-Wilk normality test
+
+data:  gg_avg_length_per_week_by_treatment$Avg_Length
+W = 0.88059, p-value = 0.08919'   # normality assumption met
+
+# Levene's Test to check for homogeneity of treatments in gg avg length per treatment per week
+
+leveneTest(gg_avg_length_per_week_by_treatment$Avg_Length, 
+gg_avg_length_per_week_by_treatment$Treatment, center = mean )
+
+'Levenes Test for Homogeneity of Variance (center = mean)
+      Df F value Pr(>F)
+group  2  1.0912 0.3764
+       9   ' # p-value > 0.05; assumption of equal variances met
+
+# Model of average length per treatment per week
+
+mGAL <-  aov(Avg_Length ~ Treatment + Week, data = gg_avg_length_per_week_by_treatment)
+
+summary(mGAL)
+
+aov(mGAL)
+
+anova(mGAL)
+
+###### Run post hoc test
+
+# Run emmeans for Treatment with pairwise comparisons
+emmeans_mGAL <- emmeans(mGAL, pairwise ~ Treatment)
+
+# View estimated marginal means
+emmeans_mGAL$emmeans
+
+# View Tukey-adjusted pairwise comparisons
+emmeans_mGAL$contrasts
+
+
+###############################################################################
+                            ##  ANOVA Table ##
+###############################################################################
+
+# Create a model of gg weight vs gg length for table
+
+
+gg_al <- gg_avg_length %>%   #extracting avg length
+arrange(Tank_No) %>% 
+summarise(Treatment = Treatment, Avg_Length = Avg_Length, Row_ID = row_number(), .groups = "drop")
+
+gg_aw <- gg_avg_weight %>%    #extracting avg weight
+arrange(Tank_No) %>% 
+summarise(Avg_Weight = Avg_Weight,Row_ID = row_number(), .groups = "drop")
+
+
+gg_aov_merged <- merge(gg_al,gg_aw, by = "Row_ID" ) 
+  
+  mAOV <- aov(Avg_Weight ~ Avg_Length, data = gg_aov_merged)
+
+  gg_avg_length_anova <- as.data.frame(summary(mAOV)[[1]]) %>%
+  tibble::rownames_to_column(var = "Term")
+  
+  gg_avg_length_anova %>%
+  gt(rowname_col = "Term") %>%
+  fmt_number(columns = where(is.numeric), decimals = 3) %>%
+  cols_label(
+    `Df` = "Degrees of Freedom",
+    `Sum Sq` = "Sum of Squares",
+    `Mean Sq` = "Mean Square",
+    `F value` = "F-value",
+    `Pr(>F)` = "p-value"
+  ) %>%
+  tab_spanner(
+    label = "ANOVA Results",
+    columns = everything()
+  )
+  
+  
+  
+  
+  
+  anova_df <- anova(mAOV) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Treatment") %>%
+  filter(Term != "Residuals")  # remove residuals
+
+# Build gt table
+anova_df %>%
+  gt(rowname_col = "Term") %>%
+  fmt_number(columns = where(is.numeric), decimals = 3) %>%
+  cols_label(
+    Df = "Degrees of Freedom",
+    `Sum Sq` = "Sum of Squares",
+    `Mean Sq` = "Mean Square",
+    `F value` = "F-value",
+    `Pr(>F)` = "p-value"
+  ) %>%
+  tab_spanner(
+    label = "ANOVA Results by Treatment",
+    columns = everything()
   )
 
- length <-GracilariaID_data %>%
-  group_by(Week,Treatment ) %>%
-  summarise(
-    mean_value = mean(Value, na.rm = TRUE),
-    sd_value = sd(Value, na.rm = TRUE),
-    n = n()
+
+# New Attempt
+
+# Function to extract only regression row from aov()
+tidy_anova <- function(model, treatment_name) {
+  a <- summary(model)[[1]]
+  a <- a[rownames(a) != "Residuals", ] # remove residuals
+  data.frame(
+    Treatment = treatment_name,
+     `Sum of squares` = a[["Sum Sq"]],
+    df = a[["Df"]],
+    `Mean squares` = a[["Mean Sq"]],
+    `F value` = a[["F value"]],
+    check.names = FALSE
+  )
+}
+
+# Critical F function
+get_dfs <- function(model) {
+  a <- summary(model)[[1]]
+  df1 <- a[1, "Df"] # numerator df
+  df2 <- a["Residuals", "Df"] # denominator df
+  c(df1 = df1, df2 = df2)
+}
+
+# Critical F table
+critical_Fs <- tibble(
+  Treatment = c("Control", "5", "10"),
+  df1 = c(get_dfs(mcon)["df1"], get_dfs(m5)["df1"], get_dfs(m10)["df1"]),
+  df2 = c(get_dfs(mcon)["df2"], get_dfs(m5)["df2"], get_dfs(m10)["df2"])
+) %>%
+  mutate(F0.01 = qf(0.99, df1, df2)) %>%
+  select(Treatment, F0.01)
+
+# Combine ANOVAs — only regression rows
+anova_df <- bind_rows(
+  tidy_anova(mcon, "Control"),
+  tidy_anova(m5, "5"),
+  tidy_anova(m10, "10")
+) %>%
+  left_join(critical_Fs, by = "Treatment")
+
+# Final table — one row per treatment
+anova_df %>%
+  gt(rowname_col = "Treatment") %>%
+  fmt_number(
+    columns = where(is.numeric),
+    decimals = 2
+  ) %>%
+  tab_header(
+    title = md("Analysis of variance between thallus length and net wet weight"),
+    subtitle = md("*Gracilariopsis longissima* - grouped by cutting length")
+  ) %>%
+  tab_options(
+    table.font.size = px(14),
+    data_row.padding = px(5)
+)
+
+
+
+
+
+
+
+
+tidy_anova <- function(model, treatment_name) {
+  a <- summary(model)[[1]]
+  data.frame(
+    Treatment = treatment_name,
+    Source = rownames(a),
+    `Sum of squares` = a[["Sum Sq"]],
+    df = a[["Df"]],
+    `Mean squares` = a[["Mean Sq"]],
+    `F value` = a[["F value"]],
+    check.names = FALSE
+  )
+}
+
+# Extract dfs for each model
+get_dfs <- function(model) {
+  a <- summary(model)[[1]]
+  # numerator df is usually first row (treatment), denominator df is residuals row
+  df1 <- a["AW", "Df"] # adjust "AW" if your predictor has different name
+  df2 <- a["Residuals", "Df"]
+  c(df1 = df1, df2 = df2)
+}
+
+# Calculate critical F at 0.01 for each model
+critical_Fs <- tibble(
+  Treatment = c("Control", "5", "10"),
+  df1 = c(get_dfs(mcon)["df1"], get_dfs(m5)["df1"], get_dfs(m10)["df1"]),
+  df2 = c(get_dfs(mcon)["df2"], get_dfs(m5)["df2"], get_dfs(m10)["df2"])
+) %>%
+  mutate(F0.01 = qf(0.99, df1, df2)) %>%
+  select(Treatment, F0.01)
+
+# Combine ANOVA summaries
+anova_df <- bind_rows(
+  tidy_anova(mcon, "Control"),
+  tidy_anova(m5, "5"),
+  tidy_anova(m10, "10")
+)
+
+# Join critical F values to anova_df by Treatment
+anova_df <- anova_df %>%
+  left_join(critical_Fs, by = "Treatment")
+
+# Format with gt
+anova_df %>%
+  filter(Source != "Residuals") %>%  # usually exclude residual row
+  gt(groupname_col = "Treatment", rowname_col = "Source") %>%
+  fmt_number(
+    columns = where(is.numeric),
+    decimals = 2
+  ) %>%
+  tab_header(
+    title = md("*Analysis of variance between thallus length and net wet weight*"),
+    subtitle = md("Gracilaria chorda — grouped by cutting length")
+  ) %>%
+  tab_options(
+    table.font.size = px(14),
+    data_row.padding = px(5)
   )
 
 
@@ -53,61 +322,1427 @@ Ave <- GracilariaID_data %>%
 
 
 
-GracilariaRGR_data <- GracilariaID_data  %>%
-  mutate(GracilariaRGR_data, RGR_Length =(Formula for growth rate))
-
-
- ggplot(length, aes(x = , y = length$mean_value )) +
-   geom_boxplot() +
-   facet_wrap(~ Week) +
-   theme_minimal()
 
 
 
 
 
+mcon <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "Control"))
+m5 <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "5"))
+m10 <- aov(AL ~ AW, data = subset(gl_all_merged, Treatment == "10"))
+
+# Function to extract ANOVA table into tidy form
+tidy_anova <- function(model, treatment_name) {
+  a <- summary(model)[[1]]
+  data.frame(
+    Treatment = treatment_name,
+    Source = rownames(a),
+    `Sum of squares` = a[["Sum Sq"]],
+    df = a[["Df"]],
+    `Mean squares` = a[["Mean Sq"]],
+    `F value` = a[["F value"]],
+    check.names = FALSE
+  )
+}
+
+# Combine results
+anova_df <- bind_rows(
+  tidy_anova(mcon, "Control"),
+  tidy_anova(m5, "5"),
+  tidy_anova(m10, "10")
+)
+
+# Add the F0.01 column (constant for all, adjust as needed)
+anova_df$F0.01 <- 6.76
+
+# Format with gt
+anova_df %>%
+  gt(groupname_col = "Treatment", rowname_col = "Source") %>%
+  fmt_number(
+    columns = where(is.numeric),
+    decimals = 2
+  ) %>%
+  tab_header(
+    title = md("*Analysis of variance between thallus length and net wet weight*"),
+    subtitle = md("Gracilaria chorda — grouped by cutting length")
+  ) %>%
+  tab_options(
+    table.font.size = px(14),
+    data_row.padding = px(5)
+)
 
 
+######### Plotting ##############################################################
+
+# Box plot of distribution of length per treatment per week by tank number
+
+ggplot(gg_avg_length, aes(x = factor(Week), y = Avg_Length, fill = Treatment)) +
+  geom_boxplot(position = position_dodge(width = 0.6),alpha =0.5)+ facet_wrap(~ Treatment, scale = "free_x") +
+   geom_text(aes(label = Tank_No), vjust = -0.5, size = 3)+
+labs(
+    title = "Distribution of Length per Treatment by Week go GG",
+    y = "Length",
+    x = "Week"
+  ) 
+  
+# Line graph of the Average Treatment Length per week 
+
+ggplot(gg_avg_length_per_week_by_treatment, aes(x = Week, y = Avg_Length, shape = Treatment)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = Avg_Length - SD_Length, ymax = Avg_Length + SD_Length),
+                width = 0.2, alpha = 0.6) +
+  labs(
+    title = "Average Treatment Length Per Week",
+    x = "Week",
+    y = "Thallus length (cm)",
+    color = "Treatment"
+  ) +
+  theme_minimal() +
+    theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_color_brewer(palette = "Dark2")
+
+###################### Tabulating ############################################
+
+# Average Length Table GG
+
+gg_avg_length_per_week_by_treatment$Date <- as.Date(gg_avg_length_per_week_by_treatment$Date) # proper format
 
 
+gg_length_table <- gg_avg_length_per_week_by_treatment %>% # Getting days
+  group_by(Treatment) %>%
+  mutate(Days = as.numeric(Date - min(Date))) %>%
+  replace_na(list(Days = 0)) %>%
+  ungroup()
+
+
+gg_length_table1 <- gg_length_table %>% # Joining Week and Days
+  mutate(Week_Days = paste0("Week ", Week, "  ( ",Days," )")) %>%
+  select(Treatment, Week_Days, Avg_Length)
+
+gg_length_table1 <- gg_length_table1 %>% # Long to Wide format 
+  pivot_wider(
+    names_from = Week_Days,
+    values_from = Avg_Length)
+
+gg_length_table1 %>%
+  gt( ) %>%
+  fmt_number(
+    columns = everything(),
+    decimals = 2
+  ) %>%
+  tab_header(title = "Average Treatment Length per Week of GG") %>%
+  tab_spanner(
+    label = "Thallus Length (mean,cm)",
+    columns = -Treatment) 
+
+# ANOVA summary table
+
+# Convert ANOVA summary to a data frame
+gg_avg_length_anova <- as.data.frame(summary(mGAL)[[1]]) %>%
+  tibble::rownames_to_column(var = "Term")
+
+# Make a gt table
+gg_avg_length_anova %>%
+  gt(rowname_col = "Term") %>%
+  fmt_number(columns = where(is.numeric), decimals = 3) %>%
+  cols_label(
+    `Df` = "Degrees of Freedom",
+    `Sum Sq` = "Sum of Squares",
+    `Mean Sq` = "Mean Square",
+    `F value` = "F-value",
+    `Pr(>F)` = "p-value"
+  ) %>%
+  tab_spanner(
+    label = "ANOVA Results",
+    columns = everything()
+  )
 ```
 
-using anova and t test we need to module the data by relative significances 
-growth rate - length over time point or even with weight. to also compared the 
-different treatments to one other.
-
+Calculating relative growth rate of length by treatment , GG
 
 ```{r}
+################################################################################
+                         #GG#   #RGR#     #LENGTH#
+################################################################################
+#  Relative growth rate (RGR) of length of both species of seaweed
+
+gg_avg_length$Date <- as.Date(gg_avg_length$Date) # proper format
+
+gg_rgr_length <- gg_avg_length %>%
+arrange(Tank_No) %>% 
+group_by(Tank_No,Treatment) %>%
+  mutate(Delta_Time = as.numeric((Date) - lag(Date)),
+  RGR_Length = (log(Avg_Length) - lag(log(Avg_Length))) / Delta_Time,
+  Tot_RGR = (Avg_Length[Week == 3]-Avg_Length[Week == 0])/as.numeric(max(Date)-min(Date)))
+
+ rgr_weekly_sd <- gg_rgr_length %>%
+  group_by(Week,Treatment) %>%
+  summarise(
+    SD_RGR = sd(RGR_Length, na.rm = TRUE), .groups = "drop")
+
+gg_avg_rgr_length <- gg_rgr_length %>%
+  group_by(Treatment, Week) %>%
+  summarise(
+  RGR_Length = mean(RGR_Length,na.rm = TRUE),
+  SD_RGR_Length = mean(RGR_Length, na.rm = TRUE), N = n(),
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE), # need SD still
+  Date = max(Date), .groups = "drop") %>%
+ungroup()
+ 
+ gg_avg_length$Date <- as.Date(gg_avg_length$Date)
+
+ #for rgr sd will come later for it :(
+ ###############################################
+ 
+ #rgr_weekly_sd <- gg_rgr_length %>%
+ # group_by(Week,Treatment) %>%
+ # mutate(
+ #   SD_RGR = sd(RGR_Length, na.rm = TRUE))
+
+#gg_rgr_length <- gg_rgr_length %>% # Adding SD
+#  left_join(rgr_weekly_sd, by = "Week")
+ ###############################################
+
+####### Modeling ###############################################################
 
 
-avo 
+# Shapiro-Wilk normality test to test normality of gg RGR Length per treatment per week
+
+shapiro.test((gg_avg_rgr_length$RGR_Length))
+
+'	Shapiro-Wilk normality test
+
+data:  (gg_rgr_length$RGR_Length)
+W = 0.96327, p-value = 0.2705' # normality assumption met
+
+# Levene's Test to check for homogeneity of treatments in gg avg rgr length per treatment per week
+
+leveneTest(RGR_Length ~ Treatment, center = mean, data = gg_rgr_length)
+
+'Levenes Test for Homogeneity of Variance (center = mean)
+      Df F value Pr(>F)
+group  2  0.0179 0.9822
+      33   ' # assumption of equal variances met    
+
+# Model of rgr length  per treatment per week --> do not model RGR
+
+# mGRL  <- aov(RGR_Length ~ Treatment +  Date, data = gg_rgr_length) # Check if best opt
+
+# summary(mGRL)
+
+# anova(mGRL)
+
+# aov(mGRL) 
 
 
 
+plot(mGRL)
+
+######### Plotting ##############################################################
+
+# Box plot of distribution of RGR length per treatment per week of GG
+
+ggplot(gg_rgr_length, aes(x = factor(Week), y = RGR_Length, fill = Treatment)) +
+  geom_boxplot(position = position_dodge(width = 0.6),coef = Inf) + facet_wrap(~ Treatment) +
+  labs(
+    title = "Distribution of Relative growth rate of Length per Treatment per Week of GG",
+    y = "RGR Length",
+    x = "Week") 
+    
+#Line graph of RGR length per treatment per week
+  
+'Adjust style of plot to make you happy'      
+ggplot(gg_avg_rgr_length, aes(x = Week, y = RGR_Length, shape = Treatment)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Average Seaweed Length Over Time",
+    x = "Date",
+    y = "Average RGR Length (cm.cm.day)", # get right units and also see if you want to show ave rgr by week
+    color = "Treatment"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Dark2")
+
+######### Tabulating ###########################################################
+
+# RGR Length Table GG
+
+library(dplyr)
+library(tidyr)
+
+gg_rgr_length_table <- gg_avg_rgr_length %>%
+  mutate(Date = as.Date(Date)) %>% 
+  group_by(Treatment) %>%
+  # Calculate cumulative days since first measurement
+  mutate(Days_cum = as.numeric(Date - first(Date))) %>%
+  # Create range labels
+  mutate(RGR_Days = paste0(lag(Days_cum, default = 0), "-", Days_cum)) %>%
+  # Replace NA in RGR_Length for week 0 with 0
+  mutate(RGR_Length = replace_na(RGR_Length, 0)) %>%
+  ungroup()
+
+# Pivot to wide format
+gg_rgr_length_table1 <- gg_rgr_length_table %>%
+  select(Treatment, RGR_Days, RGR_Length, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Length
+  )
+
+rgr_order <- gg_rgr_length_table %>%
+  arrange(Days_cum) %>%
+  pull(RGR_Days) %>%
+  unique()
+
+gg_rgr_length_table1 <- gg_rgr_length_table %>%
+  select(Treatment, RGR_Days, RGR_Length, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Length
+  ) %>%
+   select(Treatment, all_of(rgr_order), Tot_RGR)
+
+gg_rgr_length_table1 %>% gt() %>% tab_header(
+    title = md("**Relative Growth Rate (Length)**"),
+    subtitle = "Per time period with total RGR at right"
+  ) %>% fmt_number(
+    columns = where(is.numeric),
+    decimals = 5
+  ) %>% cols_label(
+    Tot_RGR = "(0-21)"
+  ) %>% tab_spanner(
+    label = "RGR per Time Period (Days)",
+    columns = c("0-0":"14-21")
+  ) %>% tab_spanner(label = "Total RGR (Days)",
+    columns = Tot_RGR
+  ) %>%tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_stub(rows = everything())
+  )
+  
+    
+```
+
+Processing the data Average STD of Gracilaria gracilis weight by treatment per week.
+
+```{r}
+################################################################################
+                             #GG#       #WEIGHT#
+################################################################################
+
+# Filter data by species and weight
+
+#gg_weight <- seaweed_data %>%
+#  filter(Measurement_Type == "Weight", Species == "Gracilaria gracilis" ) 
+  
+gg_weight <- final_data %>%
+  filter(Measurement_Type == "Weight", Species == "Gracilaria gracilis" ) 
+
+# Calculate mean SD and SE
+gg_avg_weight <- gg_weight %>% # Used to plot box plot
+  group_by(Treatment,Tank_No,Week) %>%
+  summarise(
+  Avg_Weight = mean(Value,na.rm = TRUE),N = n(), SD_Weight = sd(Value, na.rm = TRUE), SE_Weight =       SD_Weight / sqrt(N),Date = max(Date),.groups = "drop") %>%
+  ungroup()
+
+# Average treatment weight per week
+ 
+gg_avg_weight_per_week_by_treatment <- gg_avg_weight %>% # Used to plot line graph
+  group_by(Week,Treatment) %>%
+  summarise(Avg_Weight = mean(Avg_Weight,na.rm = TRUE), N= n(), SD_Weight = mean(SD_Weight,na.rm = TRUE), SE_Weight = mean(SE_Weight,na.rm = TRUE), Date = max(Date), .groups = "drop") %>%
+  ungroup()
+
+####### Modeling ###############################################################
 
 
 
+# Shapiro-Wilk normality test to test normality of gg avg weight per treatment per week
+
+shapiro.test(gg_avg_weight_per_week_by_treatment$Avg_Weight)
+
+	'Shapiro-Wilk normality test
+
+data:  gg_avg_weight_per_week_by_treatment$Avg_Weight
+W = 0.88293, p-value = 0.09556 ' # assumption of normality met
+
+# Levene's Test to check for homogeneity of treatments in gg avg weight per treatment per week
+
+leveneTest(Avg_Weight ~ Treatment, center = mean, data = gg_avg_weight_per_week_by_treatment)
+
+'Levenes Test for Homogeneity of Variance (center = mean)
+      Df F value Pr(>F)
+group  2  0.5483 0.5961
+       9   ' # assumption of equal variances met
+
+# Model of average weight per treatment per week
+
+mGAW <-  lm(Avg_Weight ~ Treatment + Week, data = gg_avg_weight_per_week_by_treatment)
+
+summary(mGAW)
+
+anova(mGAW)
 
 
+plot(mGAW)
+
+###### Run post hoc test
+
+# Run emmeans for Treatment with pairwise comparisons
+emmeans_mGAW <- emmeans(mGAW, pairwise ~ Treatment)
+
+# View estimated marginal means
+emmeans_mGAW$emmeans
+
+# View Tukey-adjusted pairwise comparisons
+emmeans_mGAW$contrasts
+
+######### Plotting ##############################################################
+
+# Box plot distribution of weight per treatment per week of GG
+
+ggplot(gg_avg_weight, aes(x = factor(Week), y = Avg_Weight, fill = Treatment)) +
+  geom_boxplot(position = position_dodge(width = 0.6),alpha =0.5)+ facet_wrap(~ Treatment, scale = "free_x") +
+labs(
+    title = "Distribution of Weight per Treatment by Week of GG",
+    y = "Weight",
+    x = "Week")
+    
+# Line graph of average weight per treatment per week of GG
+
+ggplot(gg_avg_weight_per_week_by_treatment, aes(x = Week, y = Avg_Weight, shape = Treatment)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = Avg_Weight - SD_Weight, ymax = Avg_Weight + SD_Weight),
+                width = 0.1, size = 0.5) +
+  labs(
+    title = "Average Seaweed Weight Over Time",
+    x = "Week",
+    y = "Average Weight (g)",
+    color = "Treatment"
+  ) +
+  theme_minimal() +
+    theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_color_brewer(palette = "Dark2")
 
 
+######################### Tabulating ###########################################
+
+# GG average weight
+
+gg_avg_weight_per_week_by_treatment$Date <- as.Date(gg_avg_weight_per_week_by_treatment$Date) # proper format
 
 
+gg_weight_table <- gg_avg_weight_per_week_by_treatment %>% # Getting days
+  group_by(Treatment) %>%
+  mutate(Days = as.numeric(Date - min(Date))) %>%
+  replace_na(list(Days = 0)) %>%
+  ungroup()
+
+
+gg_weight_table1 <- gg_weight_table %>% # Joining Week and Days
+  mutate(Week_Days = paste0("Week ", Week, "  ( ",Days," )")) %>%
+  select(Treatment, Week_Days, Avg_Weight)
+
+gg_weight_table1 <- gg_weight_table1 %>% # Long to Wide format 
+  pivot_wider(
+    names_from = Week_Days,
+    values_from = Avg_Weight)
+
+gg_weight_table1 %>%
+  gt( ) %>%
+  fmt_number(
+    columns = everything(),
+    decimals = 2
+  ) %>%
+  tab_header(title = "Average Treatment Weight per Week of GG") %>%
+  tab_spanner(
+    label = "Wet weight (mean, g)",
+    columns = -Treatment)
 
 
 
 ```
 
+Calculating relative growth rate of weight by treatment , GG
+
+```{r}
+################################################################################
+                         #GG#   #RGR#     #WEIGHT#
+################################################################################
+
+
+gg_avg_weight$Date <- as.Date(gg_avg_weight$Date) # proper format
+
+gg_rgr_weight <- gg_avg_weight %>%
+arrange(Tank_No) %>% 
+group_by(Tank_No,Treatment) %>%
+  mutate(Delta_Time = as.numeric((Date) - lag(Date)),
+  RGR_Weight = (log(Avg_Weight) - lag(log(Avg_Weight))) / Delta_Time,
+  Tot_RGR = (Avg_Weight[Week == 3]-Avg_Weight[Week == 0])/as.numeric(max(Date)-min(Date)))
+
+rgr_weekly_sd <- gg_rgr_weight %>%
+  group_by(Week,Treatment) %>%
+  mutate(
+    SD_RGR = sd(RGR_Weight, na.rm = TRUE))
+    
+gg_avg_rgr_weight <- rgr_weekly_sd %>%
+  group_by(Treatment, Week) %>%
+  summarise(
+  RGR_Weight = mean(RGR_Weight,na.rm = TRUE), N = n(),
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
+  Date = max(Date), .groups = "drop") %>%
+ungroup()
+
+####### Modeling ###############################################################
+
+# Shapiro-Wilk normality test to test normality of gg RGR weight per treatment per week
+
+shapiro.test(gg_avg_rgr_weight$RGR_Weight)
+
+'Shapiro-Wilk normality test
+
+data:  gg_avg_rgr_weight$RGR_Weight
+W = 0.86062, p-value = 0.09739' # normality assumption are met 
+
+# Levene's Test to check for homogeneity of treatments in gg RGR Weight
+
+leveneTest(RGR_Weight ~ Treatment, center = mean, data = gg_avg_rgr_weight)
+
+'Levenes Test for Homogeneity of Variance (center = mean)
+      Df F value Pr(>F)
+group  2  0.4946 0.6326
+       6     '  # equal variances assumption met
+
+# Model for rgr weight per treatment per week
+
+# mGRW  <- lm(RGR_Weight ~ Treatment * Date, data = gg_avg_rgr_weight)
+
+# summary(mGRW)
+# anova(mGRW)
+# AIC(mGRW)
+
+# plot(mGRW)
+
+
+######### Plotting ##############################################################
+
+# Box plot of distribution of RGR Weight per treatment per week of GG
+
+ggplot(gg_rgr_weight, aes(x = factor(Week), y = RGR_Weight, fill = Treatment)) +
+  geom_boxplot(position = position_dodge(width = 0.6)) + geom_jitter() +facet_wrap(~ Treatment) +
+  labs(
+    title = "Distribution of rgr weight per Treatment by Week of GG",
+    y = "Length",
+    x = "Week") 
+    
+#Line graph of RGR Weight per treatment per week of GG
+    
+ggplot(gg_avg_rgr_weight, aes(x = Week, y = RGR_Weight, color = Treatment)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Average Seaweed Length Over Time",
+    x = "Date",
+    y = "Average Weight (g)",
+    color = "Treatment"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Dark2")
+
+############################# Tabulating #######################################
+
+# RGR weight table GG
+
+gg_rgr_weight_table <- gg_avg_rgr_weight %>%
+  mutate(Date = as.Date(Date)) %>% 
+  group_by(Treatment) %>%
+  # Calculate cumulative days since first measurement
+  mutate(Days_cum = as.numeric(Date - first(Date))) %>%
+  # Create range labels
+  mutate(RGR_Days = paste0(lag(Days_cum, default = 0), "-", Days_cum)) %>%
+  # Replace NA in RGR_Length for week 0 with 0
+  mutate(RGR_Weight = replace_na(RGR_Weight, 0)) %>%             
+  ungroup()
+
+# Pivot to wide format
+gg_rgr_weight_table1 <- gg_rgr_weight_table %>%
+  select(Treatment, RGR_Days, RGR_Weight, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Weight
+  )
+
+rgr_order <- gg_rgr_weight_table %>%
+  arrange(Days_cum) %>%
+  pull(RGR_Days) %>%
+  unique()
+
+gg_rgr_weight_table1 <- gg_rgr_weight_table %>%
+  select(Treatment, RGR_Days, RGR_Weight, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Weight
+  ) %>%
+   select(Treatment, all_of(rgr_order), Tot_RGR)
+
+gg_rgr_weight_table1 %>% gt() %>% tab_header(
+    title = md("**Relative Growth Rate (Weight)**"),
+    subtitle = "Per time period with total RGR at right"
+  ) %>% fmt_number(
+    columns = where(is.numeric),
+    decimals = 5
+  ) %>% cols_label(
+    Tot_RGR = "(0-21)"
+  ) %>% tab_spanner(
+    label = "RGR per Time Period (Days)",
+    columns = c("0-0":"14-21")
+  ) %>% tab_spanner(label = "Total RGR (Days)",
+    columns = Tot_RGR
+  ) %>%tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_stub(rows = everything())
+  )
+  
+
+
+```
+
+######### Gracilariopsis longissima
+
+Processing the data Average STD of Gracilariopsis longissima length by treatment per week.
+
+```{r}
+################################################################################
+                           #GL#        #LENGTH#
+################################################################################
+# Average Length and Standard deviation of Gracilariopsis longissima for each tank per week
+
+# Filter data by species and length
+#gl_length <- seaweed_data %>%
+#  filter(Measurement_Type == "Length", Species == "Gracilariopsis longissima" ) 
+  
+gl_length <- final_data %>%
+  filter(Measurement_Type == "Length", Species == "Gracilariopsis longissima" ) 
+
+# Calculate mean SD and SE
+gl_avg_length <- gl_length %>%
+  group_by(Treatment, Tank_No,Week) %>%
+  summarise(Avg_Length = mean(Value,na.rm = TRUE),N = n(), SD_Length = sd(Value), 
+            SE_Length = SD_Length / sqrt(N),Date = max(Date),.groups = "drop") %>% 
+  ungroup() 
+
+# Average treatment length per week
+gl_avg_length_per_week_by_treatment <- gl_avg_length  %>%
+  group_by( Week,Treatment) %>%
+  summarise(
+    Avg_Length = mean(Avg_Length,na.rm = TRUE), N = n(),
+    SD_Length = mean(SD_Length,na.rm = TRUE), SE_Length = mean(SE_Length,na.rm = TRUE),
+    Date = max(Date), .groups = "drop")
+
+
+####### Modeling ###############################################################
+
+# Shapiro-Wilk normality test to test normality of gg avg length per treatment per week
+
+shapiro.test(gl_avg_length_per_week_by_treatment$Avg_Length)
+
+'Shapiro-Wilk normality test
+
+data:  gl_avg_length_per_week_by_treatment$Avg_Length
+W = 0.8447, p-value = 0.0316 ' # normality assumption not met
+
+
+# Levene's Test to check for homogeneity of treatments in gg avg length per treatment per week
+
+leveneTest(Avg_Length ~ Treatment, center = mean, data = gl_avg_length_per_week_by_treatment)
+
+'Levenes Test for Homogeneity of Variance (center = mean)
+      Df F value  Pr(>F)  
+group  2  5.2489 0.03084 *
+       9    ' # equal variances assumption not met
+       
+# Use Generalized Least Squares Model instead of linear model, use Week instead of Date
+
+m_LAL <- gls(
+  Avg_Length ~ Treatment + Week,
+  weights = varIdent(form = ~1 | Treatment),  # allows different variance per treatment
+  data = gl_avg_length_per_week_by_treatment
+)
+
+summary(m_LAL)
+
+anova(m_LAL)
+
+
+plot(m_LAL)
+
+####### Run post hoc test
+
+# Run pairwise comparisons for Treatment
+emmeans_gls <- emmeans(m_LAL, pairwise ~ Treatment)
+
+# View the estimated means
+emmeans_gls$emmeans
+
+# View the pairwise comparisons (Tukey-adjusted)
+emmeans_gls$contrasts
+
+       
+# Models of average length per treatment per week of GL; CANNOT USE BECAUSE ASSUMPTIONS VIOLATED
+
+#mLAL <-  lm(Avg_Length ~ Treatment + Date, data = gl_avg_length_per_week_by_treatment)
+
+#summary(mLAL)
+#anova(mLAL)
+#aov(mLAL)
+#AIC(mLAL)
+
+#plot(mLAL)
+
+######### Plotting ##############################################################
+
+# Box plot distribution of length per treatment per week of GL
+ggplot(gl_length, aes(x = factor(Week), y = Value, fill = Treatment)) +
+  geom_boxplot(position = position_dodge(width = 0.6),coef = Inf) + facet_wrap(~ Treatment) +
+   geom_text(aes(label = Tank_No), vjust = -0.5, size = 3)+
+  labs(
+    title = "Distribution of Length per Treatment by Week of GL",
+    y = "Length",
+    x = "Week"
+  ) +
+  theme_minimal()
+
+# Line graph of average length per treatment per week 
+
+ggplot(gl_avg_length_per_week_by_treatment, aes(x = Week, y = Avg_Length, shape = Treatment)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) + 
+  geom_errorbar(aes(ymin = Avg_Length - SD_Length, ymax = Avg_Length + SD_Length), width = 0.2, alpha = 0.6) +
+  labs(
+    title = "Average Length Over Time Of GL",
+    x = "Week",
+    y = "Mean Length (cm)",
+    color = "Treatment"
+  ) +
+  theme_minimal() +
+    theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_color_brewer(palette = "Dark2")
+ 
+ 
+######### Tabulating ###########################################################
+
+# Average length Table
+
+gl_avg_length_per_week_by_treatment$Date <- as.Date(gl_avg_length_per_week_by_treatment$Date) # proper format
+
+
+gl_length_table <- gl_avg_length_per_week_by_treatment %>% # Getting days
+  group_by(Treatment) %>%
+  mutate(Days = as.numeric(Date - min(Date))) %>%
+  replace_na(list(Days = 0)) %>%
+  ungroup()
+
+
+gl_length_table1 <- gl_length_table %>% # Joining Week and Days
+  mutate(Week_Days = paste0("Week ", Week, "  ( ",Days," )")) %>%
+  select(Treatment, Week_Days, Avg_Length)
+
+gl_length_table1 <- gl_length_table1 %>% # Long to Wide format 
+  pivot_wider(
+    names_from = Week_Days,
+    values_from = Avg_Length)
+
+gl_length_table1 %>%
+  gt( ) %>%
+  fmt_number(
+    columns = everything(),
+    decimals = 2
+  ) %>%
+  tab_header(title = "Average Treatment Length per Week of GL") %>%
+  tab_spanner(
+    label = "Thallus Length (mean, cm)",
+    columns = -Treatment)
+
+
+```
+
+Calculating relative growth rate of length by treatment , GL
+
+```{r}
+################################################################################
+                         #GL#    #RGR#    #LENGTH#
+################################################################################
+
+#  Relative growth rate (RGR) of length of Gracilariopsis longissima
+
+gl_avg_length$Date <- as.Date(gl_avg_length$Date) # proper format
+
+gl_rgr_length <- gl_avg_length %>%
+arrange(Tank_No) %>% 
+group_by(Tank_No,Treatment) %>%
+  mutate(Delta_Time = as.numeric((Date) - lag(Date)),
+  RGR_Length = (log(Avg_Length) - lag(log(Avg_Length))) / Delta_Time,
+  Tot_RGR = (Avg_Length[Week == 3]-Avg_Length[Week == 0])/as.numeric(max(Date)-min(Date)))
+
+rgr_weekly_sd <- gl_rgr_length %>%
+  group_by(Week,Treatment) %>%
+  mutate(
+    SD_RGR = sd(RGR_Length, na.rm = TRUE))
+    
+gl_avg_rgr_length <- rgr_weekly_sd %>%
+  group_by(Treatment, Week) %>%
+  summarise(
+  RGR_Length = mean(RGR_Length,na.rm = TRUE), N = n(),
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
+  Date = max(Date), .groups = "drop") %>%
+ungroup()
+ 
+####### Modeling ###############################################################
+
+# Shapiro-Wilk normality test to test normality of gg RGR Length per treatment per week
+
+shapiro.test((gl_avg_rgr_length$RGR_Length))
+
+'Shapiro-Wilk normality test
+
+data:  (gl_avg_rgr_length$RGR_Length)
+W = 0.86882, p-value = 0.1194' # normality assumption met
+
+# Levene's Test to check for homogeneity of treatments in gl avg length per treatment per week
+
+leveneTest(RGR_Length ~ Treatment, center = mean, data = gl_avg_rgr_length)
+
+'Levenes Test for Homogeneity of Variance (center = mean)
+      Df F value Pr(>F)
+group  2  2.2588 0.1856
+       6               ' # Assumption of equal variances are met
+      
+
+#Model of average rgr length 
+
+#mLRL  <- lm(RGR_Length ~ Treatment * Date , data = gl_avg_rgr_length)
+
+#summary(mLRL)
+#anova(mLRL)
+#AIC(mLRL)
+
+"We need to find best fit"
+
+######### Plotting ##############################################################
+
+# Box plot of rgr length of gl per week
+ggplot(gl_rgr_length, aes(x = factor(Week), y = RGR_Length, fill = Treatment)) +
+  geom_boxplot(position = position_dodge(width = 0.6),coef = Inf) + facet_wrap(~ Treatment) +
+  labs(
+    title = "Distribution of rgr length per Treatment by Week of GL",
+    y = "Length",
+    x = "Week") 
+    
+# Line graph of average GL RGR Length per treatment per week
+    
+ggplot(gl_avg_rgr_length, aes(x = Week, y = RGR_Length, color = Treatment)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Average Seaweed Length Over Time",
+    x = "Date",
+    y = "Average Weight (g)",
+    color = "Treatment"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Dark2")
+
+
+########################## Tabulating ########################################
+
+# RGR Length Table
+
+gl_rgr_length_table <- gl_avg_rgr_length %>%
+  mutate(Date = as.Date(Date)) %>% 
+  group_by(Treatment) %>%
+  # Calculate cumulative days since first measurement
+  mutate(Days_cum = as.numeric(Date - first(Date))) %>%
+  # Create range labels
+  mutate(RGR_Days = paste0(lag(Days_cum, default = 0), "-", Days_cum)) %>%
+  # Replace NA in RGR_Length for week 0 with 0
+  mutate(RGR_Length = replace_na(RGR_Length, 0)) %>%
+  ungroup()
+
+# Pivot to wide format
+gl_rgr_length_table1 <- gl_rgr_length_table %>%
+  select(Treatment, RGR_Days, RGR_Length, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Length
+  )
+
+rgr_order <- gl_rgr_length_table %>%
+  arrange(Days_cum) %>%
+  pull(RGR_Days) %>%
+  unique()
+
+gl_rgr_length_table1 <- gl_rgr_length_table %>%
+  select(Treatment, RGR_Days, RGR_Length, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Length
+  ) %>%
+   select(Treatment, all_of(rgr_order), Tot_RGR)
+
+gl_rgr_length_table1 %>% gt() %>% tab_header(
+    title = md("**Relative Growth Rate (Length)**"),
+    subtitle = "Per time period with total RGR at right"
+  ) %>% fmt_number(
+    columns = where(is.numeric),
+    decimals = 5
+  ) %>% cols_label(
+    Tot_RGR = "(0-20)"
+  ) %>% tab_spanner(
+    label = "RGR per Time Period (Days)",
+    columns = c("0-0":"13-20")
+  ) %>% tab_spanner(label = "Total RGR (Days)",
+    columns = Tot_RGR
+  ) %>%tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_stub(rows = everything())
+  )
+  
+ 
+```
+
+Processing the data Average STD of Gracilariopsis longissima weight by treatment per week.
+
+```{r}
+################################################################################
+                           #GL#        #WEIGHT#
+################################################################################
+#  Relative growth rate (RGR) of length of Gracilariopsis longissima
+
+#gl_weight <- seaweed_data %>%
+#  filter(Measurement_Type == "Weight", Species == "Gracilariopsis longissima" ) 
+  
+  gl_weight <- final_data %>%
+  filter(Measurement_Type == "Weight", Species == "Gracilariopsis longissima" ) 
+
+# Calculate mean SD and SE
+
+gl_avg_weight <- gl_weight %>%
+  group_by(Treatment,Tank_No,Week) %>%
+  summarise(
+  Avg_Weight = mean(Value,na.rm = TRUE),N = n(), SD_Weight = sd(Value, na.rm = TRUE), SE_Weight =       SD_Weight / sqrt(N),Date = max(Date),.groups = "drop") %>%
+  ungroup()
+
+# Average treatment weight per week
+ 
+gl_avg_weight_per_week_by_treatment <- gl_avg_weight %>%
+  group_by(Week,Treatment) %>%
+  summarise(Avg_Weight = mean(Avg_Weight,na.rm = TRUE), N= n(), SD_Weight = mean(SD_Weight,na.rm = TRUE), SE_Weight = mean(SE_Weight,na.rm = TRUE), Date = max(Date), .groups = "drop") %>%
+  ungroup()
+
+####### Modeling ###############################################################
+
+
+# Shapiro-Wilk normality test to test normality of gg avg weight per treatment per week
+
+shapiro.test(gl_avg_weight_per_week_by_treatment$Avg_Weight)
+
+'Shapiro-Wilk normality test
+
+data:  gl_avg_weight_per_week_by_treatment$Avg_Weight
+W = 0.91583, p-value = 0.2532' # normality assumption met
+
+# Levene's Test to check for homogeneity of treatments in gg avg weight per treatment per week
+
+leveneTest(Avg_Weight ~ Treatment, center = mean, data = gl_avg_weight_per_week_by_treatment)
+
+'Levenes Test for Homogeneity of Variance (center = mean)
+      Df F value Pr(>F)
+group  2  0.1086 0.8982
+       9    ' # equal variances assumption met
+
+# Model average weight per treatment per week
+
+mLAW <-  lm(Avg_Weight ~ Treatment + Week, data = gl_avg_weight_per_week_by_treatment)
+
+summary(mLAW)
+anova(mLAW)
+aov(mLAW)
+
+plot(mLAW)
+
+###### Run post hoc test
+
+# Run emmeans for Treatment with pairwise comparisons
+emmeans_mLAW <- emmeans(mLAW, pairwise ~ Treatment)
+
+# View estimated marginal means
+emmeans_mLAW$emmeans
+
+# View Tukey-adjusted pairwise comparisons
+emmeans_mLAW$contrasts
+
+######### Plotting ##############################################################
+
+#Box plot of weight of GL
+
+ggplot(gl_avg_weight, aes(x = factor(Week), y = Avg_Weight, fill = Treatment)) +
+  geom_boxplot(position = position_dodge(width = 0.6),alpha =0.5)+ facet_wrap(~ Treatment, scale = "free_x") +
+  geom_jitter()+ geom_text(aes(label = Tank_No), vjust = -0.5, size = 3)+
+labs(
+    title = "Distribution of Weight per Treatment by Week of GL",
+    y = "Length",
+    x = "Week")
+    
+# Line graph of average weight per treatment per week
+
+ggplot(gl_avg_weight_per_week_by_treatment, aes(x = Week, y = Avg_Weight, shape = Treatment)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = Avg_Weight - SD_Weight, ymax = Avg_Weight + SD_Weight),
+                width = 0.1, alpha = 0.6) +  
+  labs(
+    title = "Average Weight per treatment Over Time of gl",
+    x = "Week",
+    y = "Average Weight (g)",
+    color = "Treatment"
+  ) +
+  theme_minimal() +
+    theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_color_brewer(palette = "Dark2")
+
+########################### Tabulating ########################################
+
+# GL average weight Table
+
+gl_avg_weight_per_week_by_treatment$Date <- as.Date(gl_avg_weight_per_week_by_treatment$Date) # proper format
+
+
+gl_weight_table <- gl_avg_weight_per_week_by_treatment %>% # Getting days
+  group_by(Treatment) %>%
+  mutate(Days = as.numeric(Date - min(Date))) %>%
+  replace_na(list(Days = 0)) %>%
+  ungroup()
+
+
+gl_weight_table1 <- gl_weight_table %>% # Joining Week and Days
+  mutate(Week_Days = paste0("Week ", Week, "  ( ",Days," )")) %>%
+  select(Treatment, Week_Days, Avg_Weight)
+
+gl_weight_table1 <- gl_weight_table1 %>% # Long to Wide format 
+  pivot_wider(
+    names_from = Week_Days,
+    values_from = Avg_Weight)
+
+gl_weight_table1 %>%
+  gt( ) %>%
+  fmt_number(
+    columns = everything(),
+    decimals = 2
+  ) %>%
+  tab_header(title = "Average Treatment Weight per Week of GL") %>%
+  tab_spanner(
+    label = "Wet weight (mean, g)",
+    columns = -Treatment)
+
+
+  
+```
+
+Calculating relative growth rate of weight by treatment , GL
+
+```{r}
+################################################################################
+                         #GL#    #RGR#    #WEIGHT#
+################################################################################
+
+# Make sure date is formatted
+
+gl_avg_weight$Date <- as.Date(gl_avg_weight$Date)
+
+gl_rgr_weight <- gl_avg_weight %>%
+arrange(Tank_No) %>% 
+group_by(Tank_No,Treatment) %>%
+  mutate(Delta_Time = as.numeric((Date) - lag(Date)),
+  RGR_Weight = (log(Avg_Weight) - lag(log(Avg_Weight))) / Delta_Time,
+  Tot_RGR = (Avg_Weight[Week == 3]-Avg_Weight[Week == 0])/as.numeric(max(Date)-min(Date)))
+
+rgr_weekly_sd <- gl_rgr_weight %>%
+  group_by(Week,Treatment) %>%
+  mutate(
+    SD_RGR = sd(RGR_Weight, na.rm = TRUE))
+    
+gl_avg_rgr_weight <- rgr_weekly_sd %>%
+  group_by(Treatment, Week) %>%
+  summarise(
+  RGR_Weight = mean(RGR_Weight,na.rm = TRUE), N = n(),
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
+  Date = max(Date), .groups = "drop") %>%
+ungroup()
+
+
+####### Modeling ###############################################################
+
+# Shapiro-Wilk normality test to test normality of gl RGR weight per treatment per week
+
+shapiro.test(gl_avg_rgr_weight$RGR_Weight)
+
+'	Shapiro-Wilk normality test
+
+data:  gl_avg_rgr_weight$RGR_Weight
+W = 0.91298, p-value = 0.3373' # normality assumption met
+
+# Levene's Test to check for homogeneity of treatments in gl RGR Weight
+
+leveneTest(RGR_Weight ~ Treatment, center = mean, data = gl_avg_rgr_weight)
+
+'Levenes Test for Homogeneity of Variance (center = mean)
+      Df F value Pr(>F)
+group  2  2.8575 0.1343
+       6 ' # equal variances assumption not met, however is met if
+      # "center = mean" above is removed, then uses center = median instead
+      # (adjust ANOVA later with var.equal = FALSE)
+
+# model for rgr weight 
+
+#mLRW  <- lm(RGR_Weight ~ Treatment *Date + Tank_No , data = gl_rgr_weight)
+
+#summary(mLRW)
+#anova(mLRW)
+#AIC(mLRW)
+
+"We need to find best fit"
+#plot(mLRW)
+
+
+######### Plotting ##############################################################
+
+
+# Box plot of rgr weight per treatments per week of GL
+
+ggplot(gl_rgr_weight, aes(x = factor(Week), y = RGR_Weight, fill = Treatment)) +
+  geom_boxplot(position = position_dodge(width = 0.6)) + geom_jitter() +facet_wrap(~ Treatment) +
+  labs(
+    title = "Distribution of rgr weight per Treatment by Week of GL",
+    y = "Length",
+    x = "Week") 
+    
+# Line graph of rgr weught per treat per week of GL
+    
+ggplot(gl_avg_rgr_weight, aes(x = Week, y = RGR_Weight, shape = Treatment)) +
+  geom_line(linewidth= 1) +
+  geom_point(size = 3) +
+  labs(
+    title = "THE RGR OF WEIGHT OF TREATMENTS PER TIME POINT OF GL",
+    x = "Week",
+    y = "Average Weight (g)",
+    color = "Treatment"
+  ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Dark2")
+
+############################# Tabulating #######################################
+
+# RGR Weight table GL
+
+gl_rgr_weight_table <- gl_avg_rgr_weight %>%
+  mutate(Date = as.Date(Date)) %>% 
+  group_by(Treatment) %>%
+  # Calculate cumulative days since first measurement
+  mutate(Days_cum = as.numeric(Date - first(Date))) %>%
+  # Create range labels
+  mutate(RGR_Days = paste0(lag(Days_cum, default = 0), "-", Days_cum)) %>%
+  # Replace NA in RGR_Length for week 0 with 0
+  mutate(RGR_Weight = replace_na(RGR_Weight, 0)) %>%             
+  ungroup()
+
+# Pivot to wide format
+gl_rgr_weight_table1 <- gl_rgr_weight_table %>%
+  select(Treatment, RGR_Days, RGR_Weight, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Weight
+  )
+
+rgr_order <- gl_rgr_weight_table %>%
+  arrange(Days_cum) %>%
+  pull(RGR_Days) %>%
+  unique()
+
+gl_rgr_weight_table1 <- gl_rgr_weight_table %>%
+  select(Treatment, RGR_Days, RGR_Weight, Tot_RGR) %>%
+  pivot_wider(
+    names_from = RGR_Days,
+    values_from = RGR_Weight
+  ) %>%
+   select(Treatment, all_of(rgr_order), Tot_RGR)
+
+gl_rgr_weight_table1 %>% gt() %>% tab_header(
+    title = md("**Relative Growth Rate (Weight)**"),
+    subtitle = "Per time period with total RGR at right"
+  ) %>% fmt_number(
+    columns = where(is.numeric),
+    decimals = 5
+  ) %>% cols_label(
+    Tot_RGR = "(0-21)"
+  ) %>% tab_spanner(
+    label = "RGR per Time Period (Days)",
+    columns = c("0-0":"13-20")
+  ) %>% tab_spanner(label = "Total RGR (Days)",
+    columns = Tot_RGR
+  ) %>%tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_stub(rows = everything())
+  )
+  
+
+```
+
+```{r}
+################################################################################
+############################  SCATTER  PLOTS  ##################################
+################################################################################
+
+#=====================================# 
+#Scatterplots of Length VS Weight of GG
+#=====================================#
+
+#Linking GG Length and Weight to each tank
+
+gg_al <- gg_avg_length %>%   #extracting avg length
+arrange(Tank_No) %>% 
+summarise(Treatment = Treatment, AL = Avg_Length, Row_ID = row_number(), .groups = "drop")
+
+gg_aw <- gg_avg_weight %>%    #extracting avg weight
+arrange(Tank_No) %>% 
+summarise(AW = Avg_Weight,Row_ID = row_number(), .groups = "drop")
+
+
+## Scatter plot for 10 cm of GG ################################################
+
+gg_avg_merged <- merge(gg_al,gg_aw, by = "Row_ID" ) %>% # merging by 10
+filter(Treatment == "10") 
+
+ggplot(gg_avg_merged, aes(x = AL, y = AW)) +
+  geom_point(shape = 2, size = 3, aes(color = Treatment)) + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(
+    x = "Thallus length (cm)",
+    y = "Weight (g)",
+    color = ""  
+  ) +
+  scale_color_manual(values = c("black")) + 
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    ,
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+ 
+## Scatter plot for 5 cm of GG #################################################  
+
+gg_avg_merged <- merge(gg_al,gg_aw, by = "Row_ID" ) %>% # merging by 5
+filter(Treatment == "5") 
+
+ggplot(gg_avg_merged, aes(x = AL, y = AW)) +
+  geom_point(shape = 0, size = 3, aes(color = Treatment)) +  
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(
+    x = "Thallus length (cm)",
+    y = "Wet weight (g)",
+    color = ""  
+  ) +
+  scale_color_manual(values = c("black")) + 
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    ,
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+## Scatter plot for Control of GG ##############################################
+
+gg_avg_merged <- merge(gg_al,gg_aw, by = "Row_ID" ) %>% # merging by control
+filter(Treatment == "Control") 
+
+ggplot(gg_avg_merged, aes(x = AL, y = AW)) +
+  geom_point(shape = 1, size = 4, aes(color = Treatment)) + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(
+    x = "Thallus length (cm)",
+    y = "Wet weight (g)",
+    color = ""
+  ) +
+  scale_color_manual(values = c("black")) +
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    ,
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+################################################################################
+
+#=====================================# 
+#Scatterplots of Length VS Weight of GL
+#=====================================#
+
+#Linking GL Length and Weight to each tank
+
+gl_al <- gl_avg_length %>%   #extracting avg length
+arrange(Tank_No) %>% 
+summarise(Treatment = Treatment, AL = Avg_Length, Row_ID = row_number(), .groups = "drop")
+
+gl_aw <- gl_avg_weight %>%    #extracting avg weight
+arrange(Tank_No) %>% 
+summarise(AW = Avg_Weight,Row_ID = row_number(), .groups = "drop")
+
+
+gl_all_merged <- merge(gl_al,gl_aw, by = "Row_ID" ) 
 
 
 
+## Scatter plot for 10 cm of GL ################################################
+
+gl_avg_merged <- merge(gl_al,gl_aw, by = "Row_ID" ) %>% # merging
+filter(Treatment == "10") 
 
 
+ggplot(gl_avg_merged, aes(x = AL, y = AW)) +
+  geom_point(shape = 2, size = 3, aes(color = Treatment)) +  # Open circles
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(
+    x = "Thallus length (cm)",
+    y = "Wet weight (g)",
+    color = ""   # empty legend title
+  ) +
+  scale_color_manual(values = c("black")) +  # or pick your colors
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    ,
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+  
+## Scatter plot for 5 cm of GL #################################################  
+  
+gl_avg_merged <- merge(gl_al,gl_aw, by = "Row_ID" ) %>% 
+filter(Treatment == "5") 
 
+ggplot(gl_avg_merged, aes(x = AL, y = AW)) +
+  geom_point(shape = 0, size = 3, aes(color = Treatment)) +  # Open circles
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  stat_poly_eq(
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(
+    x = "Thallus length (cm)",
+    y = "Wet weight (g)",
+    color = ""   # empty legend title
+  ) +
+  scale_color_manual(values = c("black")) +  # or pick your colors
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    ,
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 
+## Scatter plot for Control of GL ##############################################
 
+gl_avg_merged <- merge(gl_al,gl_aw, by = "Row_ID" ) %>% # merges the 2 avgs of gl
+filter(Treatment == "Control") # used to plot different treatments
 
+ggplot(gl_avg_merged, aes(x = AL, y = AW)) +
+  geom_point(shape = 1, size = 4, aes(color = Treatment)) +
+  geom_smooth(
+    method = "lm", se = FALSE, color = "black") + 
+    stat_poly_eq(
+    aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+    formula = y ~ x,
+    parse = TRUE,
+    size = 4
+  ) +
+  labs(
+    x = "Thallus length (cm)",
+    y = "Wet weight (g)",
+    color = ""   # empty legend title
+  ) +
+  scale_color_manual(values = c("black")) +  # or pick your colors
+  theme_bw(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.justification = "left",
+    ,
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 
+"If you want by tank number maybe if you want tank number"
+ geom_text(
+    label=TanK, 
+    nudge_x = 0.25, nudge_y = 0.25, 
+    check_overlap = T
+ )+
+################################################################################
+
+# Plot seeing the best tanks / spagetthi plot
+
+ggplot(gl_avg_weight, aes(x = Date, y = Avg_Weight, group = Tank_No, color = Treatment)) +
+  geom_line(alpha = 0.4) +
+  labs(title = "Growth Trajectories per Tank")
+
+```
 
 
 
@@ -139,3 +1774,7 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+
+```
