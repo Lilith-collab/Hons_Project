@@ -811,6 +811,131 @@ ggplot(avg_merged, aes(x = AL, y = AW)) +
 
 ```
 
+ANOVA Table of length and wet weight
+
+```{r}
+
+al <- avg_length %>%   #extracting avg length
+arrange(Tank_No) %>% 
+summarise(Treatment = Species, AL = Avg_Length, Row_ID = row_number(), .groups = "drop")
+
+aw <- avg_weight %>%    #extracting avg weight
+arrange(Tank_No) %>% 
+summarise(AW = Avg_Weight,Row_ID = row_number(), .groups = "drop")
+
+
+all_merged <- merge(al,aw, by = "Row_ID" ) 
+
+mGG <- aov(AL ~ AW, data = subset(all_merged, Treatment == "Gracilaria gracilis"))
+mGL <- aov(AL ~ AW, data = subset(all_merged, Treatment == "Gracilariopsis longissima"))
+
+
+
+tidy_anova <- function(model, treatment_name) {
+  a <- summary(model)[[1]]
+  
+  # The first row in the ANOVA table is always the regression (predictor) term
+  reg <- a[1, , drop = FALSE]
+  reg_df <- data.frame(
+    Treatment = treatment_name,
+    Source = "Regression",
+    `Sum of squares` = reg[["Sum Sq"]],
+    df = reg[["Df"]],
+    `Mean squares` = reg[["Mean Sq"]],
+    `F value` = reg[["F value"]],
+    check.names = FALSE
+  )
+  
+  # Residual row
+  res <- a["Residuals", , drop = FALSE]
+  res_df <- data.frame(
+    Treatment = treatment_name,
+    Source = "Residual",
+    `Sum of squares` = res[["Sum Sq"]],
+    df = res[["Df"]],
+    `Mean squares` = res[["Mean Sq"]],
+    `F value` = NA,
+    check.names = FALSE
+  )
+  
+  # Total row
+  total_df <- data.frame(
+    Treatment = treatment_name,
+    Source = "Total",
+    `Sum of squares` = reg[["Sum Sq"]] + res[["Sum Sq"]],
+    df = reg[["Df"]] + res[["Df"]],
+    `Mean squares` = NA,
+    `F value` = NA,
+    check.names = FALSE
+  )
+  
+  rbind(reg_df, res_df, total_df)
+}
+
+# Critical F function
+
+get_dfs <- function(model) {
+  a <- summary(model)[[1]]
+  df1 <- a[1, "Df"] # numerator df
+  df2 <- a["Residuals", "Df"] # denominator df
+  c(df1 = df1, df2 = df2)
+}
+
+# Critical F table
+
+
+critical_Fs <- tibble(
+  Treatment = c("Gracilaria gracilis", "Gracilariopsis longissima"),
+  df1 = c(get_dfs(mGG)["df1"], get_dfs(mGL)["df1"]),
+  df2 = c(get_dfs(mGG)["df2"], get_dfs(mGL)["df2"])
+) %>%
+  mutate(F0.01 = qf(0.99, df1, df2)) %>%
+  select(Treatment, F0.01)
+
+
+#critical_Fs <- tibble(
+  #Treatment = c("Gracilaria gracilis", "Gracilariopsis longissima"),
+ # df1 = c(get_dfs(mGG)["df1"], get_dfs(mGL)["df1"],
+ # df2 = c(get_dfs(mGG)["df2"], get_dfs(mGL)["df2"])
+#)) %>%
+ # mutate(F0.01 = qf(0.99, df1, df2)) %>%
+ # select(Treatment, F0.01)
+
+
+# Create Anova Table
+
+anova_df <- bind_rows(
+  tidy_anova(mGG, "*Gracilaria gracilis*"),
+  tidy_anova(mGL, "*Gracilariopsis longissima*")
+) %>%
+  left_join(critical_Fs, by = "Treatment") %>%
+  rename(`Cutting length` = Treatment) %>%
+  group_by(`Cutting length`) %>%
+  mutate(`Cutting length` = ifelse(row_number() == 1, `Cutting length`, "")) %>%
+  ungroup()
+
+anova_df %>%
+  gt() %>%
+  fmt_number(
+    columns = where(is.numeric),
+    decimals = 2
+  ) %>%
+  tab_header(
+    title = md("Analysis of variance between thallus length and net wet weight")
+  ) %>%
+  fmt_markdown(columns = "Cutting length") %>%  # <-- make species names italic
+  tab_options(
+    table.font.size = px(14),
+    data_row.padding = px(5),
+    table_body.hlines.style = "none"
+  ) %>%
+  tab_style(
+    style = cell_borders(sides = "bottom", color = "black", weight = px(1)),
+    locations = cells_body(rows = Source == "Total")
+  )
+
+```
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
