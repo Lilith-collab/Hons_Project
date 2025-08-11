@@ -885,21 +885,13 @@ get_dfs <- function(model) {
 
 
 critical_Fs <- tibble(
-  Treatment = c("Gracilaria gracilis", "Gracilariopsis longissima"),
+  Treatment = c("*Gracilaria gracilis*", "*Gracilariopsis longissima*"),
   df1 = c(get_dfs(mGG)["df1"], get_dfs(mGL)["df1"]),
   df2 = c(get_dfs(mGG)["df2"], get_dfs(mGL)["df2"])
 ) %>%
   mutate(F0.01 = qf(0.99, df1, df2)) %>%
   select(Treatment, F0.01)
 
-
-#critical_Fs <- tibble(
-  #Treatment = c("Gracilaria gracilis", "Gracilariopsis longissima"),
- # df1 = c(get_dfs(mGG)["df1"], get_dfs(mGL)["df1"],
- # df2 = c(get_dfs(mGG)["df2"], get_dfs(mGL)["df2"])
-#)) %>%
- # mutate(F0.01 = qf(0.99, df1, df2)) %>%
- # select(Treatment, F0.01)
 
 
 # Create Anova Table
@@ -909,9 +901,9 @@ anova_df <- bind_rows(
   tidy_anova(mGL, "*Gracilariopsis longissima*")
 ) %>%
   left_join(critical_Fs, by = "Treatment") %>%
-  rename(`Cutting length` = Treatment) %>%
-  group_by(`Cutting length`) %>%
-  mutate(`Cutting length` = ifelse(row_number() == 1, `Cutting length`, "")) %>%
+  rename(`Species` = Treatment) %>%
+  group_by(`Species`) %>%
+  mutate(`Species` = ifelse(row_number() == 1, `Species`, "")) %>%
   ungroup()
 
 anova_df %>%
@@ -923,7 +915,7 @@ anova_df %>%
   tab_header(
     title = md("Analysis of variance between thallus length and net wet weight")
   ) %>%
-  fmt_markdown(columns = "Cutting length") %>%  # <-- make species names italic
+  fmt_markdown(columns = "Species") %>%  # <-- make species names italic
   tab_options(
     table.font.size = px(14),
     data_row.padding = px(5),
