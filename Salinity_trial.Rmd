@@ -1,0 +1,256 @@
+---
+title: "Salinity_trial"
+author: "Lilith Diener"
+date: "2025-08-12"
+output: html_document
+---
+
+Installing and loading all necessary packages and importing the data set 
+
+```{r packages}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+```
+
+```{r}
+
+
+install.packages("gt")
+
+library(gt)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(dae)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(lubridate)
+library(emmeans)
+library(tidyverse)
+library(styler)
+library(ggpmisc)
+library(car)
+library(nlme)
+library(tibble)
+library(ggplot2)
+
+# Import data set
+
+sal_data <- Salinity_trial_provisional
+sal_data$Date <- as.Date(sal_data$Date )
+
+```
+
+
+LENGTH
+
+Filtering the data and calculating averages
+
+```{r}
+
+avg <- sal_data %>%
+  group_by(Species,Dish_No,Treatment,Measurement_Type,Day,Date) %>%
+  summarise(Average = mean(Value,na.rm = TRUE),
+  SD_Length = sd(Value, na.rm = TRUE), N = n())%>%
+  ungroup()
+
+
+sgr_length <- avg %>%
+  filter(Measurement_Type == "Length") %>%
+  group_by(Species,Dish_No,Treatment,Day,Date) %>%
+  mutate(SGR_Length = Average - lag(Average)/(as.numeric(Date - lag(Date))),
+  SGR_Per = (Average - lag(Average)/(as.numeric(Date - lag(Date))))*100 ) %>%
+  ungroup()
+
+
+# Line graph of SGR Length in percentage per treatment 
+
+
+ggplot(sgr_length, aes(x = Treatment, y = SGR_Per, shape = Species)) +
+  geom_line(linewidth = 1, aes(color = Species)) +
+  geom_point(size = 3, stroke = 1.2, aes(color = Species, fill = Species)) +
+  geom_errorbar(aes(ymin = Average - SD_Length, ymax = Average + SD_Length, color = Species),
+                width = 0.2, alpha = 0.6) +
+  labs(
+    title = "...",
+    x = "Salinity (ppt)",
+    y = "S.G.R. (%/day)",
+    shape = "Species",
+    color = "Species"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color = "black")
+  ) +
+  scale_shape_manual(
+    values = c(21, 22), # hollow circle, hollow square
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  ) +
+  scale_color_manual(
+    values = c("black", "black"), # black outlines
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  ) +
+  scale_fill_manual(
+    values = c("white", "white"), 
+    labels = c(
+      expression(italic("Gracilaria gracilis")),
+      expression(italic("Gracilariopsis longissima"))
+    )
+  ) +
+  scale_x_continuous(breaks = c(5, 10, 15, 20, 25, 35))
+
+
+```
+
+Testing ANOVA assumptions 
+
+```{r}
+
+# Shapiro-Wilk normality test 
+
+shapiro.test(avg$Average) # normality assumption met ?
+
+# Levene's Test 
+
+leveneTest(avg$Average, 
+avg$Treatment, center = mean ) # homogeneity assumption met ?
+
+```
+
+Modelling averages for both species and post hoc tests
+
+```{r}
+
+
+gg_avg <- avg %>% 
+  filter(Species == "Gracilaria gracilis", Measurement_Type == "Length") # filter by GG and length
+
+# Model average length of GG
+
+mGAL <- lm(Average ~ Treatment + Day, data = avg)
+
+summary(mGAL)
+
+anova(mGAL)
+
+#### Run post hoc test
+
+# Run emmeans for Treatment with pairwise comparisons
+emmeans_mGAL <- emmeans(mGAL, pairwise ~ Treatment)
+
+# View estimated marginal means
+emmeans_mGAL$emmeans
+
+# View Tukey-adjusted pairwise comparisons
+emmeans_mGAL$contrasts
+
+
+
+gg_avg <- avg %>% 
+  filter(Species == "Gracilaria gracilis", Measurement_Type == "Branches") # filter by GG and branches
+
+# Model average number of branches of GG
+
+mGAB <- lm(Average ~ Treatment + Day, data = avg)
+
+summary(mGAB)
+
+anova(mGAB)
+
+
+
+gg_avg <- avg %>% 
+  filter(Species == "Gracilariopsis longissima", Measurement_Type == "Length") # filter by GL and length
+
+# Model average length of GL
+
+mLAL <- lm(Average ~ Treatment + Day, data = avg)
+
+summary(mLAL)
+
+anova(mLAL)
+
+
+
+gg_avg <- avg %>% 
+  filter(Species == "Gracilariopsis longissima", Measurement_Type == "Branches") # filter by GL and branches
+
+# Model average number of branches of GL
+
+mLAB <- lm(Average ~ Treatment + Day, data = avg)
+
+summary(mLAB)
+
+anova(mLAB)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+# Calculate average length, SD and SE
+
+avg_length <- length %>%
+  group_by(Tank_No, Week, Species) %>%
+  summarise(Avg_Length = mean(Value,na.rm = TRUE), SD_Length = sd(Value), N = n(),
+SE_Length = SD_Length / sqrt(N), Date = max(Date),.groups = "drop") %>% 
+  ungroup()
+
+# Average length of species per week
+
+avg_length_per_week_by_treatment <- avg_length  %>%
+  group_by( Week, Species) %>%
+  summarise(
+    Avg_Length = mean(Avg_Length,na.rm = TRUE), N = n(),
+    SD_Length = mean(SD_Length,na.rm = TRUE), SE_Length = mean(SE_Length,na.rm = TRUE),
+    Date = max(Date), .groups = "drop")
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

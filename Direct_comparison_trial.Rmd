@@ -12,7 +12,7 @@ options(repos = c(CRAN = "https://cloud.r-project.org"))
 
 ```
 
-```{r packages}
+```{r}
 
 
 install.packages("gt")
@@ -42,7 +42,7 @@ comp_data <- Direct_comparison_trial
 
 ```
 
-LENGTH
+# Length
 
 Filtering the data and calculating averages
 
@@ -312,7 +312,7 @@ length_table1 %>%
 
 ```
 
-Relative Growth Rate (RGR) for Length
+# Specific Growth Rate (SGR) for Length
 
 ```{r}
 
@@ -410,7 +410,7 @@ tab_style(
   
 ```
 
-WEIGHT
+# Weight
 
 Filtering the data and calculating averages
 

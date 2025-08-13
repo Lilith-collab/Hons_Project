@@ -14,7 +14,7 @@ options(repos = c(CRAN = "https://cloud.r-project.org"))
 ```{r}
 
 
-install.packages("gt")
+install.packages("htmltools")
 
 
 library(gt)
@@ -34,7 +34,7 @@ library(ggpmisc)
 library(car)
 library(nlme)
 library(tibble)
-
+library(htmltools)
 
 
 ```
@@ -189,7 +189,7 @@ gg_length_table1 <- gg_length_table1 %>% # Long to Wide format
     names_from = Week_Days,
     values_from = Avg_Length)
 
-gg_length_table1 %>%
+gg_tab_length <- gg_length_table1 %>%
   gt( ) %>%
   fmt_number(
     columns = everything(),
@@ -238,19 +238,21 @@ arrange(Tank_No) %>%
 group_by(Tank_No,Treatment) %>%
   mutate(Delta_Time = as.numeric((Date) - lag(Date)),
   RGR_Length = (log(Avg_Length) - lag(log(Avg_Length))) / Delta_Time,
-  Tot_RGR = (Avg_Length[Week == 3]-Avg_Length[Week == 0])/as.numeric(max(Date)-min(Date)))
+  Tot_RGR = (Avg_Length[Week == 3]-Avg_Length[Week == 0])/as.numeric(max(Date)-min(Date)), 
+  RGR_Per =  ((log(Avg_Length) - lag(log(Avg_Length))) / Delta_Time)*100)
 
  rgr_weekly_sd <- gg_rgr_length %>%
   group_by(Week,Treatment) %>%
   summarise(
     SD_RGR = sd(RGR_Length, na.rm = TRUE), .groups = "drop")
 
-gg_avg_rgr_length <- gg_rgr_length %>%
+gg_avg_rgr_length <- rgr_weekly_sd %>%
   group_by(Treatment, Week) %>%
   summarise(
   RGR_Length = mean(RGR_Length,na.rm = TRUE),
-  SD_RGR_Length = mean(RGR_Length, na.rm = TRUE), N = n(),
-  Tot_RGR = mean(Tot_RGR, na.rm = TRUE), # need SD still
+  SD_RGR_Length = mean(SD_RGR, na.rm = TRUE), N = n(), # not the sd bro   # need SD still
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
+  RGR_Per = mean(RGR_Per, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
  
@@ -314,20 +316,23 @@ ggplot(gg_rgr_length, aes(x = factor(Week), y = RGR_Length, fill = Treatment)) +
     y = "RGR Length",
     x = "Week") 
     
-#Line graph of RGR length per treatment per week
-  
-'Adjust style of plot to make you happy'      
-ggplot(gg_avg_rgr_length, aes(x = Week, y = RGR_Length, shape = Treatment)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
+#Bar Graph for rgr percentage of length of gg
+
+ggplot(gg_avg_rgr_length, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
+  geom_col(position = position_dodge(width = 0.8), color = "black") +
+  scale_fill_manual(values = c("black", "grey50","grey")) + 
   labs(
-    title = "Average Seaweed Length Over Time",
-    x = "Date",
-    y = "Average RGR Length (cm.cm.day)", # get right units and also see if you want to show ave rgr by week
-    color = "Treatment"
+    title = "Relative Growth Rate Length (%) by Week and Treatment",
+    x = "Week",
+    y = "RGR (%)",
+    fill = "Treatment"
   ) +
-  theme_minimal() +
-  scale_color_brewer(palette = "Dark2")
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
+
 
 ######### Tabulating ###########################################################
 
@@ -368,7 +373,7 @@ gg_rgr_length_table1 <- gg_rgr_length_table %>%
   ) %>%
    select(Treatment, all_of(rgr_order), Tot_RGR)
 
-gg_rgr_length_table1 %>% gt() %>% tab_header(
+gg_tab_rgr_length <- gg_rgr_length_table1 %>% gt() %>% tab_header(
     title = md("**Relative Growth Rate (Length)**"),
     subtitle = "Per time period with total RGR at right"
   ) %>% fmt_number(
@@ -517,7 +522,7 @@ gg_weight_table1 <- gg_weight_table1 %>% # Long to Wide format
     names_from = Week_Days,
     values_from = Avg_Weight)
 
-gg_weight_table1 %>%
+gg_tab_weight <- gg_weight_table1 %>%
   gt( ) %>%
   fmt_number(
     columns = everything(),
@@ -547,7 +552,8 @@ arrange(Tank_No) %>%
 group_by(Tank_No,Treatment) %>%
   mutate(Delta_Time = as.numeric((Date) - lag(Date)),
   RGR_Weight = (log(Avg_Weight) - lag(log(Avg_Weight))) / Delta_Time,
-  Tot_RGR = (Avg_Weight[Week == 3]-Avg_Weight[Week == 0])/as.numeric(max(Date)-min(Date)))
+  Tot_RGR = (Avg_Weight[Week == 3]-Avg_Weight[Week == 0])/as.numeric(max(Date)-min(Date)),
+  RGR_Per =  ((log(Avg_Weight) - lag(log(Avg_Weight))) / Delta_Time)*100)
 
 rgr_weekly_sd <- gg_rgr_weight %>%
   group_by(Week,Treatment) %>%
@@ -559,6 +565,7 @@ gg_avg_rgr_weight <- rgr_weekly_sd %>%
   summarise(
   RGR_Weight = mean(RGR_Weight,na.rm = TRUE), N = n(),
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
+   RGR_Per =mean(RGR_Per, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
 
@@ -604,19 +611,27 @@ ggplot(gg_rgr_weight, aes(x = factor(Week), y = RGR_Weight, fill = Treatment)) +
     y = "Length",
     x = "Week") 
     
-#Line graph of RGR Weight per treatment per week of GG
-    
-ggplot(gg_avg_rgr_weight, aes(x = Week, y = RGR_Weight, color = Treatment)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
+# Bar graph of RGR Percentage 
+
+
+ggplot(gg_avg_rgr_weight, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
+  geom_col(position = position_dodge(width = 0.8), color = "black") +
+  scale_fill_manual(values = c("black", "grey50","grey")) + 
   labs(
-    title = "Average Seaweed Length Over Time",
-    x = "Date",
-    y = "Average Weight (g)",
-    color = "Treatment"
+    title = "Relative Growth Rate Weight (%) by Week and Treatment",
+    x = "Week",
+    y = "RGR (%)",
+    fill = "Treatment"
   ) +
-  theme_minimal() +
-  scale_color_brewer(palette = "Dark2")
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
+
+
+
+
 
 ############################# Tabulating #######################################
 
@@ -654,7 +669,8 @@ gg_rgr_weight_table1 <- gg_rgr_weight_table %>%
   ) %>%
    select(Treatment, all_of(rgr_order), Tot_RGR)
 
-gg_rgr_weight_table1 %>% gt() %>% tab_header(
+gg_tab_rgr_weight <- gg_rgr_weight_table1 %>% 
+  gt() %>% tab_header(
     title = md("**Relative Growth Rate (Weight)**"),
     subtitle = "Per time period with total RGR at right"
   ) %>% fmt_number(
@@ -824,7 +840,7 @@ gl_length_table1 <- gl_length_table1 %>% # Long to Wide format
     names_from = Week_Days,
     values_from = Avg_Length)
 
-gl_length_table1 %>%
+gl_tab_length <- gl_length_table1 %>%
   gt( ) %>%
   fmt_number(
     columns = everything(),
@@ -854,7 +870,8 @@ arrange(Tank_No) %>%
 group_by(Tank_No,Treatment) %>%
   mutate(Delta_Time = as.numeric((Date) - lag(Date)),
   RGR_Length = (log(Avg_Length) - lag(log(Avg_Length))) / Delta_Time,
-  Tot_RGR = (Avg_Length[Week == 3]-Avg_Length[Week == 0])/as.numeric(max(Date)-min(Date)))
+  Tot_RGR = (Avg_Length[Week == 3]-Avg_Length[Week == 0])/as.numeric(max(Date)-min(Date)),
+   RGR_Per = ((log(Avg_Length) - lag(log(Avg_Length))) / Delta_Time)*100)
 
 rgr_weekly_sd <- gl_rgr_length %>%
   group_by(Week,Treatment) %>%
@@ -866,6 +883,7 @@ gl_avg_rgr_length <- rgr_weekly_sd %>%
   summarise(
   RGR_Length = mean(RGR_Length,na.rm = TRUE), N = n(),
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
+    RGR_Per = mean(RGR_Per, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
  
@@ -910,19 +928,23 @@ ggplot(gl_rgr_length, aes(x = factor(Week), y = RGR_Length, fill = Treatment)) +
     y = "Length",
     x = "Week") 
     
-# Line graph of average GL RGR Length per treatment per week
     
-ggplot(gl_avg_rgr_length, aes(x = Week, y = RGR_Length, color = Treatment)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
+#Bar Graph for rgr percentage of length of gg
+
+ggplot(gl_avg_rgr_length, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
+  geom_col(position = position_dodge(width = 0.8), color = "black") +
+  scale_fill_manual(values = c("black", "grey50","grey")) + 
   labs(
-    title = "Average Seaweed Length Over Time",
-    x = "Date",
-    y = "Average Weight (g)",
-    color = "Treatment"
+    title = "Relative Growth Rate Length (%) by Week and Treatment",
+    x = "Week",
+    y = "RGR (%)",
+    fill = "Treatment"
   ) +
-  theme_minimal() +
-  scale_color_brewer(palette = "Dark2")
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
 
 
 ########################## Tabulating ########################################
@@ -961,9 +983,9 @@ gl_rgr_length_table1 <- gl_rgr_length_table %>%
   ) %>%
    select(Treatment, all_of(rgr_order), Tot_RGR)
 
-gl_rgr_length_table1 %>% gt() %>% tab_header(
+gl_tab_rgr_length <- gl_rgr_length_table1 %>% 
+  gt() %>% tab_header(
     title = md("**Relative Growth Rate (Length)**"),
-    subtitle = "Per time period with total RGR at right"
   ) %>% fmt_number(
     columns = where(is.numeric),
     decimals = 5
@@ -1108,7 +1130,7 @@ gl_weight_table1 <- gl_weight_table1 %>% # Long to Wide format
     names_from = Week_Days,
     values_from = Avg_Weight)
 
-gl_weight_table1 %>%
+gl_tab_weight <- gl_weight_table1 %>%
   gt( ) %>%
   fmt_number(
     columns = everything(),
@@ -1139,7 +1161,8 @@ arrange(Tank_No) %>%
 group_by(Tank_No,Treatment) %>%
   mutate(Delta_Time = as.numeric((Date) - lag(Date)),
   RGR_Weight = (log(Avg_Weight) - lag(log(Avg_Weight))) / Delta_Time,
-  Tot_RGR = (Avg_Weight[Week == 3]-Avg_Weight[Week == 0])/as.numeric(max(Date)-min(Date)))
+  Tot_RGR = (Avg_Weight[Week == 3]-Avg_Weight[Week == 0])/as.numeric(max(Date)-min(Date)),
+  RGR_Per = ((log(Avg_Weight) - lag(log(Avg_Weight))) / Delta_Time)*100)
 
 rgr_weekly_sd <- gl_rgr_weight %>%
   group_by(Week,Treatment) %>%
@@ -1151,6 +1174,7 @@ gl_avg_rgr_weight <- rgr_weekly_sd %>%
   summarise(
   RGR_Weight = mean(RGR_Weight,na.rm = TRUE), N = n(),
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
+  RGR_Per = mean(RGR_Per, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
 
@@ -1201,19 +1225,25 @@ ggplot(gl_rgr_weight, aes(x = factor(Week), y = RGR_Weight, fill = Treatment)) +
     y = "Length",
     x = "Week") 
     
-# Line graph of rgr weught per treat per week of GL
-    
-ggplot(gl_avg_rgr_weight, aes(x = Week, y = RGR_Weight, shape = Treatment)) +
-  geom_line(linewidth= 1) +
-  geom_point(size = 3) +
+# Bar graph of RGR Weight of GL
+ 
+ggplot(gl_avg_rgr_weight, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
+  geom_col(position = position_dodge(width = 0.8), color = "black") +
+  scale_fill_manual(values = c("black", "grey50","grey")) + 
   labs(
-    title = "THE RGR OF WEIGHT OF TREATMENTS PER TIME POINT OF GL",
+    title = "Relative Growth Rate Weight (%) by Week and Treatment of GL",
     x = "Week",
-    y = "Average Weight (g)",
-    color = "Treatment"
+    y = "RGR (%)",
+    fill = "Treatment"
   ) +
-  theme_minimal() +
-  scale_color_brewer(palette = "Dark2")
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
+
+
+
 
 ############################# Tabulating #######################################
 
@@ -1251,7 +1281,8 @@ gl_rgr_weight_table1 <- gl_rgr_weight_table %>%
   ) %>%
    select(Treatment, all_of(rgr_order), Tot_RGR)
 
-gl_rgr_weight_table1 %>% gt() %>% tab_header(
+gl_tab_rgr_weight <- gl_rgr_weight_table1 %>% 
+  gt() %>% tab_header(
     title = md("**Relative Growth Rate (Weight)**"),
     subtitle = "Per time period with total RGR at right"
   ) %>% fmt_number(
@@ -2071,6 +2102,23 @@ ggplot(gl_avg_weight, aes(x = Date, y = Avg_Weight, group = Tank_No, color = Tre
  
 
 ```
+
+
+
+```{r}
+#Joins GG L and RGR table
+
+browsable(tagList( gg_tab_length,gg_tab_rgr_length))
+
+#Joins GL L and RGR table
+
+browsable(tagList( gl_tab_length,gl_tab_rgr_length))
+
+```
+
+
+
+
 
 
 
