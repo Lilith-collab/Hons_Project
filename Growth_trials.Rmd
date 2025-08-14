@@ -221,9 +221,9 @@ ggplot(gg_avg_rgr_length, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) 
   scale_y_continuous(breaks = seq(-3,3,by = 0.5)) + 
    geom_hline(yintercept = 0, colour = "black", linewidth = 0.6) +
   labs(
-  title = expression("Specific Growth Rate of " * italic("Gracilaria gracilis") * " by Treatment and Week"),
+  title = expression("Daily Growth Rate of " * italic("Gracilaria gracilis") * " by Treatment and Week"),
     x = "Week",
-    y = "SGR (%)",
+    y = "DGR (%)",
     fill = "Treatment"
   ) +
    theme_classic(base_size = 14) +  
@@ -417,7 +417,7 @@ group_by(Tank_No,Treatment) %>%
 rgr_weekly_sd <- gg_rgr_weight %>%
   group_by(Week,Treatment) %>%
   mutate(
-    SD_RGR = sd(RGR_Weight, na.rm = TRUE))
+    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE))
     
 gg_avg_rgr_weight <- rgr_weekly_sd %>%
   group_by(Treatment, Week) %>%
@@ -425,6 +425,7 @@ gg_avg_rgr_weight <- rgr_weekly_sd %>%
   RGR_Weight = mean(RGR_Weight,na.rm = TRUE), N = n(),
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
    RGR_Per =mean(RGR_Per, na.rm = TRUE),
+   RGR_Per_SD =mean(RGR_Per_SD, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
 
@@ -438,10 +439,15 @@ SGR Figures
 ggplot(gg_avg_rgr_weight, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
   geom_col(position = position_dodge(width = 0.8), color = "black") +
   scale_fill_grey(start = 0.3, end = 0.8) +  
+  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SD, 
+  ymax = RGR_Per + RGR_Per_SD), width = 0.2, 
+  position = position_dodge(width = 0.9)) + 
+  scale_y_continuous(breaks = seq(-3,6,by = 0.5)) + 
+  geom_hline(yintercept = 0, colour = "black", linewidth = 0.6) +
   labs(
-  title = expression("Specific Growth Rate of " * italic("Gracilaria gracilis") * " by Treatment and Week"),
+  title = expression("Daily Growth Rate of " * italic("Gracilaria gracilis") * " by Treatment and Week"),
     x = "Week",
-    y = "SGR (%)",
+    y = "DGR (%)",
     fill = "Treatment"
   ) +
   theme_classic(base_size = 14) +  
@@ -631,7 +637,7 @@ group_by(Tank_No,Treatment) %>%
 rgr_weekly_sd <- gl_rgr_length %>%
   group_by(Week,Treatment) %>%
   mutate(
-    SD_RGR = sd(RGR_Length, na.rm = TRUE))
+    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE))
     
 gl_avg_rgr_length <- rgr_weekly_sd %>%
   group_by(Treatment, Week) %>%
@@ -639,6 +645,7 @@ gl_avg_rgr_length <- rgr_weekly_sd %>%
   RGR_Length = mean(RGR_Length,na.rm = TRUE), N = n(),
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
     RGR_Per = mean(RGR_Per, na.rm = TRUE),
+    RGR_Per_SD = mean(RGR_Per_SD, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
 
@@ -651,11 +658,16 @@ SGR Figures
 # Bar Graph for SGR percentage of length 
 ggplot(gl_avg_rgr_length, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
   geom_col(position = position_dodge(width = 0.8), color = "black") +
+  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SD, 
+  ymax = RGR_Per + RGR_Per_SD), width = 0.2, 
+  position = position_dodge(width = 0.9)) + 
+  scale_y_continuous(breaks = seq(-3,6,by = 0.5)) + 
+  geom_hline(yintercept = 0, colour = "black", linewidth = 0.6) +
   scale_fill_grey(start = 0.3, end = 0.8) + 
   labs(
-title = expression("Specific Growth Rate of " * italic("Gracilariopsis longissima") * " by Treatment and Week"),
+title = expression("Daily Growth Rate of " * italic("Gracilariopsis longissima") * " by Treatment and Week"),
     x = "Week",
-    y = "SGR (%)",
+    y = "DGR (%)",
     fill = "Treatment"
   ) +
   theme_minimal(base_size = 14) +
@@ -850,7 +862,7 @@ group_by(Tank_No,Treatment) %>%
 rgr_weekly_sd <- gl_rgr_weight %>%
   group_by(Week,Treatment) %>%
   mutate(
-    SD_RGR = sd(RGR_Weight, na.rm = TRUE))
+    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE))
     
 gl_avg_rgr_weight <- rgr_weekly_sd %>%
   group_by(Treatment, Week) %>%
@@ -858,6 +870,7 @@ gl_avg_rgr_weight <- rgr_weekly_sd %>%
   RGR_Weight = mean(RGR_Weight,na.rm = TRUE), N = n(),
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
   RGR_Per = mean(RGR_Per, na.rm = TRUE),
+  RGR_Per_SD = mean(RGR_Per_SD, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
 
@@ -870,11 +883,16 @@ SGR Figures
 # Bar graph of SGR Weight of GL
  ggplot(gl_avg_rgr_weight, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
   geom_col(position = position_dodge(width = 0.8), color = "black") +
+  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SD, 
+  ymax = RGR_Per + RGR_Per_SD), width = 0.2, 
+  position = position_dodge(width = 0.9)) + 
+  scale_y_continuous(breaks = seq(-3,6,by = 0.5)) + 
+  geom_hline(yintercept = 0, colour = "black", linewidth = 0.6) +
   scale_fill_grey(start = 0.3, end = 0.8) + 
   labs(
-  title = expression("Specific Growth Rate of " * italic("Gracilariopsis longissima") * " by Treatment and Week"),
+  title = expression("Daily Growth Rate of " * italic("Gracilariopsis longissima") * " by Treatment and Week"),
     x = "Week",
-    y = "RGR (%)",
+    y = "DGR (%)",
     fill = "Treatment"
   ) +
   theme_minimal(base_size = 14) +
@@ -1046,6 +1064,7 @@ Relationship between total length and wet weight of three cuttings in
 # Scatterplots of Length VS Weight of Gracilariopsis longissima (GL)
 
 # Linking GL Length and Weight to each tank
+
 gl_al <- gl_avg_length %>%   # extracting avg length
 arrange(Tank_No) %>% 
 summarise(Treatment = Treatment, AL = Avg_Length, Row_ID = row_number(), .groups = "drop")
