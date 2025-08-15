@@ -1386,4 +1386,21 @@ browsable(tagList( gl_tab_length,gl_tab_rgr_length))
 
 ```
 
+Wet weight (g) of cuttings cut from individuals of *Gracilaria gracilis*
+
+```{r, echo=FALSE}
+
+# Join GG Weight and SGR table
+browsable(tagList( gg_tab_weight,gg_tab_rgr_weight))
+
+```
+
+Wet weight (g) of cuttings cut from individuals of *Gracilariopsis longissima*
+
+```{r, echo=FALSE}
+
+# Join GL Weight and SGR table
+browsable(tagList( gl_tab_weight,gl_tab_rgr_weight))
+
+```
 

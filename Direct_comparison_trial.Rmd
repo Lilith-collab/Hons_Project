@@ -12,7 +12,7 @@ options(repos = c(CRAN = "https://cloud.r-project.org"))
 
 ```
 
-```{r}
+```{r, warning=FALSE, message=FALSE}
 
 
 install.packages("gt")
@@ -35,6 +35,12 @@ library(car)
 library(nlme)
 library(tibble)
 library(ggplot2)
+
+# Read in data
+
+Direct_comparison_trial <- read_excel("C:/Users/Win10/Desktop/UCT/Honours Project Gracilaria/Data/Statistical_Analyses_R/Direct_comparison_trial.xlsx")
+
+  
 
 # Import data set
 
@@ -459,13 +465,13 @@ Modelling Average weight and post hoc test
 
 # Model of average weight per species per week
 
-mW_1 <-  lm(Avg_Weight ~ Species + Week, data = avg_weight_per_week_by_treatment)
+mW <-  lm(Avg_Weight ~ Species + Week, data = avg_weight_per_week_by_treatment)
 
-summary(mW_1)
+summary(mW)
 
-aov(mW_1)
+aov(mW)
 
-anova(mW_1)
+anova(mW)
 
 
 # Run post hoc test
