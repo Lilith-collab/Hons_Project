@@ -1404,3 +1404,86 @@ browsable(tagList( gl_tab_weight,gl_tab_rgr_weight))
 
 ```
 
+
+Combine Weight and Length DGRs in bar graph for *Gracilaria gracilis*
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+
+# Combine the two datasets, adding a column to distinguish length vs weight
+gg_rgr_combined <- bind_rows(
+  gg_avg_rgr_length %>% mutate(Type = "Length"),
+  gg_avg_rgr_weight %>% mutate(Type = "Weight")
+)
+
+
+gg_rgr_combined_plot <- gg_rgr_combined %>%
+  filter(Treatment %in% c(5, 10)) %>%
+  group_by(Treatment, Type) %>%
+  summarise(Mean_RGR_Per = mean(RGR_Per, na.rm = TRUE), 
+            SD_RGR_Per = mean(RGR_Per_SD, na.rm = TRUE),.groups = "drop") %>%
+  ungroup()
+
+# Plot
+ggplot(gg_rgr_combined_plot, aes(x = Treatment, y = Mean_RGR_Per, fill = Type)) +
+  geom_col(position = position_dodge(width = 0.3), color = "black", width = 0.2) +
+    geom_errorbar(aes(ymin = Mean_RGR_Per, ymax = Mean_RGR_Per + SD_RGR_Per),
+                width = 0.2, position = position_dodge(width = 0.3)) +
+  scale_fill_grey(start = 1, end = 0) +
+  geom_smooth(aes(group = Type), color = "black",method = "lm", se = FALSE, linetype = "solid") +
+  labs(
+    title = expression("Daily Growth Rate of " * italic("Gracilaria gracilis") * " by Treatment"),
+    x = "Treatment",
+    y = "DGR (%)",
+    fill = "",
+    color = ""
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.line = element_line(color = "black", size = 0.5),
+    axis.ticks = element_line(color = "black"),
+    legend.position = "top"
+  )
+```
+
+Combine Weight and Length DGRs in bar graph for *Gracilariopsis longissima*
+
+```{r}
+
+# Combine the two datasets, adding a column to distinguish length vs weight
+gl_rgr_combined <- bind_rows(
+  gl_avg_rgr_length %>% mutate(Type = "Length"),
+  gl_avg_rgr_weight %>% mutate(Type = "Weight")
+)
+
+
+gl_rgr_combined_plot <- gl_rgr_combined %>%
+  filter(Treatment %in% c(5, 10)) %>%
+  group_by(Treatment, Type) %>%
+  summarise(Mean_RGR_Per = mean(RGR_Per, na.rm = TRUE), 
+            SD_RGR_Per = mean(RGR_Per_SD, na.rm = TRUE),.groups = "drop") %>%
+  ungroup()
+
+# Plot
+ggplot(gl_rgr_combined_plot, aes(x = Treatment, y = Mean_RGR_Per, fill = Type)) +
+  geom_col(position = position_dodge(width = 0.3), color = "black", width = 0.2) +
+    geom_errorbar(aes(ymin = Mean_RGR_Per, ymax = Mean_RGR_Per + SD_RGR_Per),
+                width = 0.2, position = position_dodge(width = 0.3)) +
+  scale_fill_grey(start = 1, end = 0) +
+  geom_smooth(aes(group = Type),color = "black", method = "lm", se = FALSE, linetype = "solid") +
+  labs(
+    title = expression("Daily Growth Rate of " * italic("Gracilariopsis longissima") * " by Treatment"),
+    x = "Treatment",
+    y = "DGR (%)",
+    fill = "",
+    color = ""
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.line = element_line(color = "black", size = 0.5),
+    axis.ticks = element_line(color = "black"),
+    legend.position = "top"
+  )
+```
