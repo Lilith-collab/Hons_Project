@@ -1229,8 +1229,8 @@ critical_Fs <- tibble(
   df1 = c(get_dfs(mcon)["df1"], get_dfs(m5)["df1"], get_dfs(m10)["df1"]),
   df2 = c(get_dfs(mcon)["df2"], get_dfs(m5)["df2"], get_dfs(m10)["df2"])
 ) %>%
-  mutate(F0.01 = qf(0.99, df1, df2)) %>%
-  select(Treatment, F0.01)
+  mutate(F0.05 = qf(0.95, df1, df2)) %>%
+  select(Treatment, F0.05)
 
 
 # Create Anova Table
@@ -1329,8 +1329,8 @@ critical_Fs <- tibble(
   df1 = c(get_dfs(mcon)["df1"], get_dfs(m5)["df1"], get_dfs(m10)["df1"]),
   df2 = c(get_dfs(mcon)["df2"], get_dfs(m5)["df2"], get_dfs(m10)["df2"])
 ) %>%
-  mutate(F0.01 = qf(0.99, df1, df2)) %>%
-  select(Treatment, F0.01)
+  mutate(F0.05 = qf(0.95, df1, df2)) %>%
+  select(Treatment, F0.05)
 
 
 # Create Anova Table
