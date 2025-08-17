@@ -177,6 +177,8 @@ Specific Growth Rate (SGR) for Length
 
 ```{r}
 
+
+
 #  Calculate specific growth rate (SGR) of length of both species of seaweed
 gg_avg_length$Date <- as.Date(gg_avg_length$Date) # proper format
 
@@ -191,7 +193,8 @@ group_by(Tank_No,Treatment) %>%
  rgr_weekly_sd <- gg_rgr_length %>%
   group_by(Week,Treatment) %>%
   mutate(
-    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE)) %>%
+    SD_RGR_Per = sd(RGR_Per, na.rm = TRUE),
+    N = sum(!is.na(RGR_Per)), SE_RGR_Per = SD_RGR_Per / sqrt(N)) %>%
    ungroup()
 
 gg_avg_rgr_length <- rgr_weekly_sd %>%
@@ -200,11 +203,14 @@ gg_avg_rgr_length <- rgr_weekly_sd %>%
   RGR_Length = mean(RGR_Length,na.rm = TRUE), N = n(),
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
   RGR_Per = mean(RGR_Per, na.rm = TRUE),
-   RGR_Per_SD = mean(RGR_Per_SD, na.rm = TRUE),
+  RGR_Per_SD = mean(SD_RGR_Per, na.rm = TRUE),
+  RGR_Per_SE = mean(SE_RGR_Per),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
  
- 
+
+
+
 ```
 
 SGR Figures
@@ -215,8 +221,8 @@ SGR Figures
 ggplot(gg_avg_rgr_length, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
   geom_col(position = position_dodge(width = 0.8), color = "black") +
   scale_fill_grey(start = 0.3, end = 0.8) + 
-  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SD, 
-  ymax = RGR_Per + RGR_Per_SD), width = 0.2, 
+  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SE, 
+  ymax = RGR_Per + RGR_Per_SE), width = 0.2, 
   position = position_dodge(width = 0.9)) + 
   scale_y_continuous(breaks = seq(-3,3,by = 0.5)) + 
    geom_hline(yintercept = 0, colour = "black", linewidth = 0.6) +
@@ -417,7 +423,9 @@ group_by(Tank_No,Treatment) %>%
 rgr_weekly_sd <- gg_rgr_weight %>%
   group_by(Week,Treatment) %>%
   mutate(
-    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE))
+    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE),
+     N = sum(!is.na(RGR_Per)), SE_RGR_Per = RGR_Per_SD / sqrt(N)) %>%
+  ungroup()
     
 gg_avg_rgr_weight <- rgr_weekly_sd %>%
   group_by(Treatment, Week) %>%
@@ -426,9 +434,8 @@ gg_avg_rgr_weight <- rgr_weekly_sd %>%
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
    RGR_Per =mean(RGR_Per, na.rm = TRUE),
    RGR_Per_SD =mean(RGR_Per_SD, na.rm = TRUE),
-  Date = max(Date), .groups = "drop") %>%
-ungroup()
-
+   RGR_Per_SE = mean(SE_RGR_Per, na.rm = TRUE),
+  Date = max(Date), .groups = "drop")
 ```
 
 SGR Figures
@@ -439,8 +446,8 @@ SGR Figures
 ggplot(gg_avg_rgr_weight, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
   geom_col(position = position_dodge(width = 0.8), color = "black") +
   scale_fill_grey(start = 0.3, end = 0.8) +  
-  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SD, 
-  ymax = RGR_Per + RGR_Per_SD), width = 0.2, 
+  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SE, 
+  ymax = RGR_Per + RGR_Per_SE), width = 0.2, 
   position = position_dodge(width = 0.9)) + 
   scale_y_continuous(breaks = seq(-3,6,by = 0.5)) + 
   geom_hline(yintercept = 0, colour = "black", linewidth = 0.6) +
@@ -637,7 +644,11 @@ group_by(Tank_No,Treatment) %>%
 rgr_weekly_sd <- gl_rgr_length %>%
   group_by(Week,Treatment) %>%
   mutate(
-    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE))
+    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE),
+  N = sum(!is.na(RGR_Per)), 
+  SE_RGR_Per = RGR_Per_SD / sqrt(N)) %>%
+  ungroup()
+
     
 gl_avg_rgr_length <- rgr_weekly_sd %>%
   group_by(Treatment, Week) %>%
@@ -646,6 +657,7 @@ gl_avg_rgr_length <- rgr_weekly_sd %>%
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
     RGR_Per = mean(RGR_Per, na.rm = TRUE),
     RGR_Per_SD = mean(RGR_Per_SD, na.rm = TRUE),
+  RGR_Per_SE = mean(SE_RGR_Per, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
 
@@ -658,8 +670,8 @@ SGR Figures
 # Bar Graph for SGR percentage of length 
 ggplot(gl_avg_rgr_length, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
   geom_col(position = position_dodge(width = 0.8), color = "black") +
-  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SD, 
-  ymax = RGR_Per + RGR_Per_SD), width = 0.2, 
+  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SE, 
+  ymax = RGR_Per + RGR_Per_SE), width = 0.2, 
   position = position_dodge(width = 0.9)) + 
   scale_y_continuous(breaks = seq(-3,6,by = 0.5)) + 
   geom_hline(yintercept = 0, colour = "black", linewidth = 0.6) +
@@ -739,7 +751,7 @@ gl_weight <- final_data %>%
 gl_avg_weight <- gl_weight %>%
   group_by(Treatment,Tank_No,Week) %>%
   summarise(
-  Average = mean(Value,na.rm = TRUE),N = n(), SD = sd(Value, na.rm = TRUE), SE =       SD / sqrt(N),Date = max(Date),.groups = "drop") %>%
+  Average = mean(Value,na.rm = TRUE),N = n(), SD = sd(Value, na.rm = TRUE), SE = SD / sqrt(N),Date = max(Date),.groups = "drop") %>%
   ungroup()
 
 # Average treatment weight per week
@@ -862,7 +874,11 @@ group_by(Tank_No,Treatment) %>%
 rgr_weekly_sd <- gl_rgr_weight %>%
   group_by(Week,Treatment) %>%
   mutate(
-    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE))
+    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE),
+  N = sum(!is.na(RGR_Per)), 
+  SE_RGR_Per = RGR_Per_SD / sqrt(N)) %>%
+  ungroup()
+
     
 gl_avg_rgr_weight <- rgr_weekly_sd %>%
   group_by(Treatment, Week) %>%
@@ -871,6 +887,7 @@ gl_avg_rgr_weight <- rgr_weekly_sd %>%
   Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
   RGR_Per = mean(RGR_Per, na.rm = TRUE),
   RGR_Per_SD = mean(RGR_Per_SD, na.rm = TRUE),
+  RGR_Per_SE = mean(SE_RGR_Per, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
 
@@ -883,8 +900,8 @@ SGR Figures
 # Bar graph of SGR Weight of GL
  ggplot(gl_avg_rgr_weight, aes(x = factor(Week), y = RGR_Per, fill = Treatment)) +
   geom_col(position = position_dodge(width = 0.8), color = "black") +
-  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SD, 
-  ymax = RGR_Per + RGR_Per_SD), width = 0.2, 
+  geom_errorbar(aes(ymin = RGR_Per - RGR_Per_SE, 
+  ymax = RGR_Per + RGR_Per_SE), width = 0.2, 
   position = position_dodge(width = 0.9)) + 
   scale_y_continuous(breaks = seq(-3,6,by = 0.5)) + 
   geom_hline(yintercept = 0, colour = "black", linewidth = 0.6) +
@@ -1423,13 +1440,13 @@ gg_rgr_combined_plot <- gg_rgr_combined %>%
   filter(Treatment %in% c(5, 10)) %>%
   group_by(Treatment, Type) %>%
   summarise(Mean_RGR_Per = mean(RGR_Per, na.rm = TRUE), 
-            SD_RGR_Per = mean(RGR_Per_SD, na.rm = TRUE),.groups = "drop") %>%
+            RGR_Per_SE = mean(RGR_Per_SE, na.rm = TRUE),.groups = "drop") %>%
   ungroup()
 
 # Plot
 ggplot(gg_rgr_combined_plot, aes(x = Treatment, y = Mean_RGR_Per, fill = Type)) +
   geom_col(position = position_dodge(width = 0.3), color = "black", width = 0.2) +
-    geom_errorbar(aes(ymin = Mean_RGR_Per, ymax = Mean_RGR_Per + SD_RGR_Per),
+    geom_errorbar(aes(ymin = Mean_RGR_Per, ymax = Mean_RGR_Per + RGR_Per_SE),
                 width = 0.2, position = position_dodge(width = 0.3)) +
   scale_fill_grey(start = 1, end = 0) +
   geom_smooth(aes(group = Type), color = "black",method = "lm", se = FALSE, linetype = "solid") +
@@ -1467,13 +1484,13 @@ gl_rgr_combined_plot <- gl_rgr_combined %>%
   filter(Treatment %in% c(5, 10)) %>%
   group_by(Treatment, Type) %>%
   summarise(Mean_RGR_Per = mean(RGR_Per, na.rm = TRUE), 
-            SE_RGR_Per = mean(RGR_Per_SE, na.rm = TRUE),.groups = "drop") %>%
+            RGR_Per_SE = mean(RGR_Per_SE, na.rm = TRUE),.groups = "drop") %>%
   ungroup()
 
 # Plot
 ggplot(gl_rgr_combined_plot, aes(x = Treatment, y = Mean_RGR_Per, fill = Type)) +
   geom_col(position = position_dodge(width = 0.3), color = "black", width = 0.2) +
-    geom_errorbar(aes(ymin = Mean_RGR_Per, ymax = Mean_RGR_Per + SD_RGR_Per),
+    geom_errorbar(aes(ymin = Mean_RGR_Per, ymax = Mean_RGR_Per + RGR_Per_SE),
                 width = 0.2, position = position_dodge(width = 0.3)) +
   scale_fill_grey(start = 1, end = 0) +
   geom_smooth(aes(group = Type),color = "black", method = "lm", se = FALSE, linetype = "solid") +
@@ -1504,7 +1521,8 @@ gl_combined_plot <- gl_combined %>%
   filter(Treatment %in% c(5, 10), Week == "3") %>%
   group_by(Treatment, Type) %>%
   summarise(Net_Yield = mean(Average, na.rm = TRUE),
-   SE = mean(SE, na.rm = TRUE))
+   SE = mean(SE, na.rm = TRUE), .groups = "drop") %>%
+  ungroup()
 
 
 # plot
@@ -1600,7 +1618,172 @@ ggplot(gg_combined_plot, aes(x = factor(Treatment), fill = Type)) +
 
 ```
 
+New models without week and control filtered out
 
+```{r}
+
+# GG Average Length (Treatment significant)
+
+gg_filtered_length <- gg_avg_length_per_week_by_treatment %>%
+  filter(Treatment %in% c(5, 10))
+
+# Shapiro-Wilk normality test to test normality of gg avg length per treatment per week
+shapiro.test(gg_filtered_length$Average) # normality assumption met
+
+# Levene's Test to check for homogeneity of treatments in gg avg length per treatment per week
+leveneTest(gg_filtered_length$Average, 
+gg_filtered_length$Treatment, center = mean ) # assumption of equal variances met
+
+# Model of average length per treatment
+mGAL_f <-  lm(Average ~ Treatment, data = gg_filtered_length)
+
+summary(mGAL_f)
+aov(mGAL_f)
+anova(mGAL_f)
+
+# Adjusted R-squared:  0.8959
+
+## GG Average Weight (Treatment insignificant)
+
+gg_filtered_weight <- gg_avg_weight_per_week_by_treatment %>%
+  filter(Treatment %in% c(5, 10))
+
+# Shapiro-Wilk normality test to test normality of gg avg weight per treatment per week
+shapiro.test(gg_filtered_weight$Average) # assumption of normality met
+
+# Levene's Test to check for homogeneity of treatments in gg avg weight per treatment per week
+leveneTest(Average ~ Treatment, center = mean, data = gg_filtered_weight) # assumption of equal variances met
+
+# Model of average weight per treatment 
+mGAW_f <-  lm(Average ~ Treatment, data = gg_filtered_weight)
+
+summary(mGAW_f)
+anova(mGAW_f)
+
+# Adjusted R-squared:  -0.1462 
+
+# GG DGR Length - Pearson correlation
+
+gg_filtered_rgr_length <- gg_rgr_length %>%
+  filter(Treatment %in% c(5, 10))
+
+# Pearson product-moment correlation coefficient
+
+cor.test(gg_filtered_rgr_length$RGR_Length,as.numeric( gg_filtered_rgr_length$Treatment), 
+         method = "pearson")
+
+# GG DGR Length - Model
+
+gg_filtered_rgr_length <- gg_avg_rgr_length %>%
+  filter(Treatment %in% c(5, 10))
+
+# Shapiro-Wilk normality test to test normality of gg RGR Length per treatment per week
+
+shapiro.test((gg_filtered_rgr_length$RGR_Length))
+# normality assumption met
+
+# Levene's Test to check for homogeneity of treatments in gg avg rgr length per treatment per week
+
+leveneTest(RGR_Length ~ Treatment, center = mean, data = gg_filtered_rgr_length) # assumption of equal variances met    
+
+# Model of rgr length  per treatment per week 
+
+mGRL_f  <- lm(RGR_Length ~ Treatment, data = gg_filtered_rgr_length) 
+
+summary(mGRL_f)
+anova(mGRL_f)
+aov(mGRL_f) 
+
+# GG DGR Weight - Pearson correlation
+
+gg_filtered_rgr_weight <- gg_avg_rgr_weight %>%
+  filter(Treatment %in% c(5, 10))
+
+# Pearson product-moment correlation coefficient
+
+cor.test(gg_filtered_rgr_weight$RGR_Weight,as.numeric( gg_filtered_rgr_weight$Treatment), 
+         method = "pearson")
+
+
+# GG DGR Weight - Model
+
+gg_filtered_rgr_weight <- gg_avg_rgr_weight %>%
+  filter(Treatment %in% c(5, 10))
+
+# Shapiro-Wilk normality test to test normality of gg RGR Weight per treatment per week
+
+shapiro.test((gg_filtered_rgr_weight$RGR_Weight))
+# normality assumption met
+
+# Levene's Test to check for homogeneity of treatments in gg avg rgr weight per treatment per week
+
+leveneTest(RGR_Weight ~ Treatment, center = mean, data = gg_filtered_rgr_weight) # assumption of equal variances met    
+
+# Model of rgr weight  per treatment per week 
+
+mGRW_f  <- lm(RGR_Weight ~ Treatment, data = gg_filtered_rgr_weight) 
+
+summary(mGRW_f)
+anova(mGRW_f)
+aov(mGRW_f) 
+
+# GL Average Length
+
+gl_filtered_length <- gl_avg_length_per_week_by_treatment %>%
+  filter(Treatment %in% c(5, 10))
+
+# Shapiro-Wilk normality test 
+shapiro.test(gl_filtered_length$Average) # normality assumption met
+
+# Levene's Test to check for homogeneity of treatments 
+leveneTest(Average ~ Treatment, center = mean, data = gl_filtered_length) # equal variances assumption met
+       
+# Model of average length per treatment
+
+mLAL_f <-  lm(Average ~ Treatment, data = gl_filtered_length)
+
+summary(mLAL_f)
+anova(mLAL_f)
+
+# GL Average Weight
+
+gl_filtered_weight <- gl_avg_weight_per_week_by_treatment %>%
+  filter(Treatment %in% c(5, 10))
+
+# Shapiro-Wilk normality test 
+shapiro.test(gl_filtered_weight$Average) # normality assumption met
+
+# Levene's Test to check for homogeneity 
+leveneTest(Average ~ Treatment, center = mean, data = gl_filtered_weight) # equal variances assumption met
+
+# Model average weight per treatment per week
+mLAW_f <-  lm(Average ~ Treatment, data = gl_filtered_weight)
+
+summary(mLAW_f)
+anova(mLAW_f)
+aov(mLAW_f)
+
+# GL DGR Length - Pearson correlation
+
+gl_filtered_rgr_length <- gl_avg_rgr_length %>%
+  filter(Treatment %in% c(5, 10))
+
+# Pearson product-moment correlation coefficient
+
+cor.test(gl_filtered_rgr_length$RGR_Length,as.numeric( gl_filtered_rgr_length$Treatment), 
+         method = "pearson")
+
+# GL DGR Weight - Pearson correlation
+
+gl_filtered_rgr_weight <- gl_avg_rgr_weight %>%
+  filter(Treatment %in% c(5, 10))
+
+# Pearson product-moment correlation coefficient
+
+cor.test(gl_filtered_rgr_weight$RGR_Weight,as.numeric(gl_filtered_rgr_weight$Treatment), 
+         method = "pearson")
+
+```
 
 
 

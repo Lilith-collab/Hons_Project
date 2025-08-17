@@ -63,8 +63,8 @@ length <- comp_data %>%
 
 avg_length <- length %>%
   group_by(Tank_No, Week, Species) %>%
-  summarise(Avg_Length = mean(Value,na.rm = TRUE), SD_Length = sd(Value), N = n(),
-SE_Length = SD_Length / sqrt(N), Date = max(Date),.groups = "drop") %>% 
+  summarise(Average = mean(Value,na.rm = TRUE), SD = sd(Value), N = n(),
+SE = SD / sqrt(N), Date = max(Date),.groups = "drop") %>% 
   ungroup()
 
 # Average length of species per week
@@ -72,8 +72,8 @@ SE_Length = SD_Length / sqrt(N), Date = max(Date),.groups = "drop") %>%
 avg_length_per_week_by_treatment <- avg_length  %>%
   group_by( Week, Species) %>%
   summarise(
-    Avg_Length = mean(Avg_Length,na.rm = TRUE), N = n(),
-    SD_Length = mean(SD_Length,na.rm = TRUE), SE_Length = mean(SE_Length,na.rm = TRUE),
+    Average = mean(Average,na.rm = TRUE), N = n(),
+    SD = mean(SD,na.rm = TRUE), SE = mean(SE,na.rm = TRUE),
     Date = max(Date), .groups = "drop")
 
 ```
@@ -84,11 +84,11 @@ Testing ANOVA assumptions
 
 # Shapiro-Wilk normality test 
 
-shapiro.test(avg_length_per_week_by_treatment$Avg_Length) # normality assumption met
+shapiro.test(avg_length_per_week_by_treatment$Average) # normality assumption met
 
 # Levene's Test 
 
-leveneTest(avg_length_per_week_by_treatment$Avg_Length, 
+leveneTest(avg_length_per_week_by_treatment$Average, 
 avg_length_per_week_by_treatment$Species, center = mean ) # homogeneity assumption met
 
 ```
@@ -99,7 +99,7 @@ Modelling Average length and post hoc test
 
 # Model of average length per species per week
 
-mL <-  aov(Avg_Length ~ Species, data = avg_length_per_week_by_treatment)
+mL <-  aov(Average ~ Species, data = avg_length_per_week_by_treatment)
 
 summary(mL)
 
@@ -108,7 +108,7 @@ aov(mL)
 anova(mL)
 
 
-mL_1 <-  aov(Avg_Length ~ Species + Week, data = avg_length_per_week_by_treatment)
+mL_1 <-  aov(Average ~ Species + Week, data = avg_length_per_week_by_treatment)
 
 summary(mL_1)
 
@@ -143,7 +143,7 @@ Plotting Average length (boxplot, line graph)
 
 # Box plot of distribution of length per treatment per week by tank number
 
-ggplot(avg_length, aes(x = factor(Week), y = Avg_Length, fill = Species)) +
+ggplot(avg_length, aes(x = factor(Week), y = Average, fill = Species)) +
   geom_boxplot(position = position_dodge(width = 0.6),alpha =0.5)+ facet_wrap(~ Species, scale = "free_x") +
    geom_text(aes(label = Tank_No), vjust = -0.5, size = 3)+
 labs(
@@ -160,7 +160,7 @@ species_labels <- c(
   "Gracilariopsis longissima" = "italic('Gracilariopsis longissima')"
 )
 
-ggplot(avg_length, aes(x = factor(Week), y = Avg_Length)) +
+ggplot(avg_length, aes(x = factor(Week), y = Average)) +
   geom_boxplot(
     position = position_dodge(width = 0.6),
     alpha = 0.5,
@@ -196,10 +196,10 @@ ggplot(avg_length, aes(x = factor(Week), y = Avg_Length)) +
 
 # Line graph of the Average Treatment Length per week 
 
-ggplot(avg_length_per_week_by_treatment, aes(x = Week, y = Avg_Length, shape = Species)) +
+ggplot(avg_length_per_week_by_treatment, aes(x = Week, y = Average, shape = Species)) +
   geom_line(linewidth = 1) +
   geom_point(size = 3) +
-  geom_errorbar(aes(ymin = Avg_Length - SD_Length, ymax = Avg_Length + SD_Length),
+  geom_errorbar(aes(ymin = Average - SD, ymax = Average + SD),
                 width = 0.2, alpha = 0.6) +
   labs(
     title = "Average Treatment Length Per Week",
@@ -220,10 +220,10 @@ ggplot(avg_length_per_week_by_treatment, aes(x = Week, y = Avg_Length, shape = S
 # New improved line graph
 
 ggplot(avg_length_per_week_by_treatment, 
-       aes(x = Week, y = Avg_Length, shape = Species)) +
+       aes(x = Week, y = Average, shape = Species)) +
   geom_line(linewidth = 1, aes(color = Species)) +
   geom_point(size = 3, stroke = 1.2, aes(color = Species, fill = Species)) +
-  geom_errorbar(aes(ymin = Avg_Length - SD_Length, ymax = Avg_Length + SD_Length, color = Species),
+  geom_errorbar(aes(ymin = Average - SD, ymax = Average + SD, color = Species),
                 width = 0.2, alpha = 0.6) +
   labs(
     title = "Average Treatment Length Per Week",
@@ -286,12 +286,12 @@ length_table <- length_table %>%
 
 length_table1 <- length_table %>% # Joining Week and Days
   mutate(Week_Days = paste0("Week ", Week, "  ( ",totDays," )")) %>%
-  select(Species, Week_Days, Avg_Length)
+  select(Species, Week_Days, Average)
 
 length_table1 <- length_table1 %>% # Long to Wide format 
   pivot_wider(
     names_from = Week_Days,
-    values_from = Avg_Length)
+    values_from = Average)
 
 #gt ave length table for species 
 
@@ -330,20 +330,26 @@ rgr_length <- avg_length %>%
 arrange(Tank_No) %>% 
 group_by(Tank_No,Species) %>%
   mutate(Delta_Time = as.numeric((Date) - lag(Date)),
-  RGR_Length = (log(Avg_Length) - lag(log(Avg_Length))) / Delta_Time,
-  Tot_RGR = (Avg_Length[Week == 3]-Avg_Length[Week == 0])/as.numeric(max(Date)-min(Date)))
+  RGR_Length = (log(Average) - lag(log(Average))) / Delta_Time,
+  Tot_RGR = (Average[Week == 3]-Average[Week == 0])/as.numeric(max(Date)-min(Date)),
+  RGR_Per =  ((log(Average) - lag(log(Average))) / Delta_Time)*100)
 
  rgr_weekly_sd <- rgr_length %>%
   group_by(Week, Species) %>%
-  summarise(
-    SD_RGR = sd(RGR_Length, na.rm = TRUE), .groups = "drop")
+ mutate(
+    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE),
+    N = sum(!is.na(RGR_Per)), 
+    SE_RGR_Per = RGR_Per_SD / sqrt(N)) %>%
+  ungroup()
 
-avg_rgr_length <- rgr_length %>%
+avg_rgr_length <- rgr_weekly_sd %>%
   group_by(Species, Week) %>%
   summarise(
   RGR_Length = mean(RGR_Length,na.rm = TRUE),
-  SD_RGR_Length = mean(RGR_Length, na.rm = TRUE), N = n(),
-  Tot_RGR = mean(Tot_RGR, na.rm = TRUE), # need SD still
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE),
+    RGR_Per = mean(RGR_Per, na.rm = TRUE),
+  RGR_Per_SD = mean(RGR_Per_SD, na.rm = TRUE),
+  RGR_Per_SE = mean(SE_RGR_Per, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
  
@@ -432,14 +438,14 @@ weight <- comp_data %>%
 avg_weight <- weight %>% 
   group_by(Species,Tank_No,Week) %>%
   summarise(
-  Avg_Weight = mean(Value,na.rm = TRUE),N = n(), SD_Weight = sd(Value, na.rm = TRUE), SE_Weight =       SD_Weight / sqrt(N),Date = max(Date),.groups = "drop") %>%
+  Average = mean(Value,na.rm = TRUE),N = n(), SD = sd(Value, na.rm = TRUE), SE =       SD / sqrt(N),Date = max(Date),.groups = "drop") %>%
   ungroup()
 
 # Average weight of species per week
  
 avg_weight_per_week_by_treatment <- avg_weight %>% 
   group_by(Week,Species) %>%
-  summarise(Avg_Weight = mean(Avg_Weight,na.rm = TRUE), N= n(), SD_Weight = mean(SD_Weight,na.rm = TRUE), SE_Weight = mean(SE_Weight,na.rm = TRUE), Date = max(Date), .groups = "drop") %>%
+  summarise(Average = mean(Average,na.rm = TRUE), N= n(), SD = mean(SD,na.rm = TRUE), SE = mean(SE,na.rm = TRUE), Date = max(Date), .groups = "drop") %>%
   ungroup()
 
 
@@ -451,11 +457,11 @@ Testing ANOVA assumptions
 
 # Shapiro-Wilk normality test 
 
-shapiro.test(avg_weight_per_week_by_treatment$Avg_Weight) # normality assumption met
+shapiro.test(avg_weight_per_week_by_treatment$Average) # normality assumption met
 
 # Levene's Test 
 
-leveneTest(Avg_Weight ~ Species, center = mean, data = avg_weight_per_week_by_treatment) # homogeneity assumption met
+leveneTest(Average ~ Species, center = mean, data = avg_weight_per_week_by_treatment) # homogeneity assumption met
 
 ```
 
@@ -465,7 +471,7 @@ Modelling Average weight and post hoc test
 
 # Model of average weight per species per week
 
-mW <-  lm(Avg_Weight ~ Species + Week, data = avg_weight_per_week_by_treatment)
+mW <-  lm(Average ~ Species + Week, data = avg_weight_per_week_by_treatment)
 
 summary(mW)
 
@@ -504,7 +510,7 @@ species_labels <- c(
   "Gracilariopsis longissima" = "italic('Gracilariopsis longissima')"
 )
 
-ggplot(avg_weight, aes(x = factor(Week), y = Avg_Weight)) +
+ggplot(avg_weight, aes(x = factor(Week), y = Average)) +
   geom_boxplot(
     position = position_dodge(width = 0.6),
     alpha = 0.5,
@@ -541,10 +547,10 @@ ggplot(avg_weight, aes(x = factor(Week), y = Avg_Weight)) +
 # Line graph of the Average Treatment Weight per week 
 
 ggplot(avg_weight_per_week_by_treatment, 
-       aes(x = Week, y = Avg_Weight, shape = Species)) +
+       aes(x = Week, y = Average, shape = Species)) +
   geom_line(linewidth = 1, aes(color = Species)) +
   geom_point(size = 3, stroke = 1.2, aes(color = Species, fill = Species)) +
-  geom_errorbar(aes(ymin = Avg_Weight - SD_Weight, ymax = Avg_Weight + SD_Weight, color = Species),
+  geom_errorbar(aes(ymin = Average - SD, ymax = Average + SD, color = Species),
                 width = 0.2, alpha = 0.6) +
   labs(
     title = "Average Treatment Weight Per Week",
@@ -607,12 +613,12 @@ weight_table <- weight_table %>%
 
 weight_table1 <- weight_table %>% # Joining Week and Days
   mutate(Week_Days = paste0("Week ", Week, "  ( ",totDays," )")) %>%
-  select(Species, Week_Days, Avg_Weight)
+  select(Species, Week_Days, Average)
 
 weight_table1 <- weight_table1 %>% # Long to Wide format 
   pivot_wider(
     names_from = Week_Days,
-    values_from = Avg_Weight)
+    values_from = Average)
 
 #gt avg weight table for species 
 
@@ -651,20 +657,27 @@ rgr_weight <- avg_weight %>%
 arrange(Tank_No) %>% 
 group_by(Tank_No,Species) %>%
   mutate(Delta_Time = as.numeric((Date) - lag(Date)),
-  RGR_Weight = (log(Avg_Weight) - lag(log(Avg_Weight))) / Delta_Time,
-  Tot_RGR = (Avg_Weight[Week == 3]-Avg_Weight[Week == 0])/as.numeric(max(Date)-min(Date)))
+  RGR_Weight = (log(Average) - lag(log(Average))) / Delta_Time,
+  Tot_RGR = (Average[Week == 3]-Average[Week == 0])/as.numeric(max(Date)-min(Date)),
+    RGR_Per =  ((log(Average) - lag(log(Average))) / Delta_Time)*100)
 
  rgr_weekly_sd <- rgr_weight %>%
   group_by(Week, Species) %>%
-  summarise(
-    SD_RGR = sd(RGR_Weight, na.rm = TRUE), .groups = "drop")
+  mutate(
+    RGR_Per_SD = sd(RGR_Per, na.rm = TRUE),
+  N = sum(!is.na(RGR_Per)), 
+  SE_RGR_Per = RGR_Per_SD / sqrt(N)) %>%
+  ungroup()
 
-avg_rgr_weight <- rgr_weight %>%
+
+avg_rgr_weight <- rgr_weekly_sd %>%
   group_by(Species, Week) %>%
   summarise(
   RGR_Weight = mean(RGR_Weight,na.rm = TRUE),
-  SD_RGR_Weight = mean(RGR_Weight, na.rm = TRUE), N = n(),
-  Tot_RGR = mean(Tot_RGR, na.rm = TRUE), # need SD still
+  Tot_RGR = mean(Tot_RGR, na.rm = TRUE), 
+  RGR_Per =mean(RGR_Per, na.rm = TRUE),
+  RGR_Per_SD =mean(RGR_Per_SD, na.rm = TRUE),
+  RGR_Per_SE = mean(SE_RGR_Per, na.rm = TRUE),
   Date = max(Date), .groups = "drop") %>%
 ungroup()
  
@@ -745,11 +758,11 @@ Scatterplots for both species
 
 al <- avg_length %>%   #extracting avg length
 arrange(Tank_No) %>% 
-summarise(Species = Species, AL = Avg_Length, Row_ID = row_number(), .groups = "drop")
+summarise(Species = Species, AL = Average, Row_ID = row_number(), .groups = "drop")
 
 aw <- avg_weight %>%    #extracting avg weight
 arrange(Tank_No) %>% 
-summarise(AW = Avg_Weight,Row_ID = row_number(), .groups = "drop")
+summarise(AW = Average,Row_ID = row_number(), .groups = "drop")
 
 
 # Scatterplot of length vs wet weight for Gracilaria gracilis
@@ -823,11 +836,11 @@ ANOVA Table of length and wet weight
 
 al <- avg_length %>%   #extracting avg length
 arrange(Tank_No) %>% 
-summarise(Treatment = Species, AL = Avg_Length, Row_ID = row_number(), .groups = "drop")
+summarise(Treatment = Species, AL = Average, Row_ID = row_number(), .groups = "drop")
 
 aw <- avg_weight %>%    #extracting avg weight
 arrange(Tank_No) %>% 
-summarise(AW = Avg_Weight,Row_ID = row_number(), .groups = "drop")
+summarise(AW = Average,Row_ID = row_number(), .groups = "drop")
 
 
 all_merged <- merge(al,aw, by = "Row_ID" ) 
@@ -934,28 +947,108 @@ anova_df %>%
 
 ```
 
+Combine Weight and Length DGRs in bar graph for both species
+
+```{r}
+
+# Combine the two datasets, adding a column to distinguish length vs weight
+rgr_combined <- bind_rows(
+  avg_rgr_length %>% mutate(Type = "Length"),
+  avg_rgr_weight %>% mutate(Type = "Weight")
+)
+
+
+rgr_combined_plot <- rgr_combined %>%
+  group_by(Species, Type) %>%
+  summarise(Mean_RGR_Per = mean(RGR_Per, na.rm = TRUE), 
+  RGR_Per_SE = mean(RGR_Per_SE, na.rm = TRUE), .groups = "drop") 
+
+
+ggplot(rgr_combined_plot, aes(x = Species, y = Mean_RGR_Per, fill = Type)) +
+  geom_col(position = position_dodge(width = 0.3), color = "black", width = 0.2) +
+    geom_errorbar(aes(ymin = Mean_RGR_Per, ymax = Mean_RGR_Per + RGR_Per_SE),
+                width = 0.2, position = position_dodge(width = 0.3)) +
+  scale_fill_grey(start = 1, end = 0) +
+  geom_smooth(aes(group = Type), color = "black",method = "lm", se = FALSE, linetype = "solid") +
+  labs(
+    title = expression("Daily Growth Rate of Seaweed species"),
+    x = "Species",
+    y = "DGR (%)",
+    fill = "",
+    color = ""
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.line = element_line(color = "black", size = 0.5),
+    axis.ticks = element_line(color = "black"),
+    legend.position = "top"
+  )
+```
+
+Bar graph of Final lengths and weights of both species of seaweed
+
+```{r}
+
+combined <- bind_rows(
+  avg_length %>% mutate(Type = "Length"),
+  avg_weight %>% mutate(Type = "Weight"))
+
+combined_plot <- combined %>%
+  group_by(Species, Type) %>%
+  summarise(Net_Yield = mean(Average, na.rm = TRUE),
+   SE = mean(SE, na.rm = TRUE), .groups = "drop") %>%
+  ungroup()
+
+
+# plot
+
+# Rescale length to match weight scale
+# Find max values
+max_weight <- max(combined_plot$Net_Yield[combined_plot$Type == "Weight"], na.rm = TRUE)
+max_length <- max(combined_plot$Net_Yield[combined_plot$Type == "Length"], na.rm = TRUE)
+
+scale_factor <- max_weight / max_length
+
+combined_plot <- combined_plot %>%
+  mutate(Net_Yield_scaled = ifelse(Type == "Length", Net_Yield * scale_factor, Net_Yield),
+         SE_scaled = ifelse(Type == "Length", SE * scale_factor, SE))
+
+ggplot(combined_plot, aes(x = factor(Species), fill = Type)) +
+  geom_col(aes(y = Net_Yield_scaled), 
+           position = position_dodge(width = 0.4), 
+           color = "black", width = 0.3) +
+  geom_errorbar(aes(ymin = Net_Yield_scaled, ymax = Net_Yield_scaled + SE_scaled),
+                width = 0.2, position = position_dodge(width = 0.4)) +
+  scale_fill_grey(start = 1, end = 0) +
+  scale_y_continuous(
+    name = "Net yield (g)", 
+    sec.axis = sec_axis(~ . / scale_factor, name = "Net yield (cm)")
+  ) +
+  labs(
+    title = expression("Net yield of " * italic("Gracilaria gracilis") * " and " * italic("Gracilariopsis longissima") * ""),
+    x = "Initial total length",
+    fill = ""
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.line = element_line(color = "black", size = 0.5),
+    axis.ticks = element_line(color = "black"),
+    legend.position = "top"
+  )
+
+
+```
+
+New models without Week
+
+```{r}
+
+```
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
